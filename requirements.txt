@@ -1,0 +1,71 @@
+# Ultra Self Bot - Dependencies
+# No version pins - let pip find compatible versions
+
+# === Core Telegram ===
+pyrogram
+TgCrypto
+
+# === Database ===
+PyMySQL
+
+# === Scheduler & Async ===
+apscheduler
+aiohttp
+aiofiles
+
+# === Web Scraping ===
+beautifulsoup4
+bs4
+lxml
+requests
+urllib3
+
+# === Terminal ===
+colorama
+
+# === Media & Downloads ===
+pytube
+youtube_search
+youtube-search-python
+youtube-dl
+ffmpeg-python
+pySmartDL
+
+# === Image Processing ===
+Pillow
+qrcode
+telegraph
+
+# === APIs ===
+instagram_private_api
+python-arq
+thisapidoesnotexist
+ipapi
+
+# === Utility ===
+psutil
+gtts
+uptime
+hurry.filesize
+schedule
+OpenCC
+
+# === Internationalization & Data ===
+pytz
+jdatetime
+countryinfo
+currencyconverter
+
+# === Search & Info ===
+wikipedia
+IMDbPY
+pymediainfo
+
+# === Translation ===
+translate
+
+# === Selenium ===
+selenium
+
+# === Importlib ===
+importlib-metadata
