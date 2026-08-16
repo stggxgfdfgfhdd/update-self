@@ -1,7 +1,7 @@
 #============ In The Name Of God ============#
 # Source Name: TiTaN SelfSaz
-# Programmer : t.me/code_watch
-# © 2024 TiTaN SeldSaz LLC. All rights reserved.
+# programmer : t.me/code_watch
+# © 2024 TiTaN SelfSaz LLC. All rights reserved.
 #=========================================#
 from colorama import Fore, init
 from pyrogram import Client, filters, idle , errors ,enums
@@ -109,7 +109,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-16-phase1-block-love-target-fix-v1"
+FIX_VERSION = "2026-08-16-phase4-monshi2-forced-join-v4"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -127,6 +127,45 @@ love = []
 fal = []
 mutey = []
 temporary_block_tasks = {}
+controlled_spam_tasks = {}
+
+
+def _spam_max_count():
+    try:
+        return max(1, int(os.environ.get("SELF_SPAM_MAX", "30")))
+    except Exception:
+        return 30
+
+
+def _spam_delay_for_mode(mode):
+    # Conservative delays keep the self stable and reduce Telegram FloodWait risk.
+    return {
+        "spam": 0.35,
+        "slowspam": 0.9,
+        "statspam": 0.35,
+        "fastspam": 0.18,
+    }.get(str(mode).lower(), 0.35)
+
+
+def _spam_usage(command="spam"):
+    return (
+        f"❖ Usage:\n"
+        f"• `.{command} 10 text`\n"
+        f"• `.{command} start 10 text`\n"
+        f"• `.{command} stop` / `.{command} cancel`\n"
+        f"• `.{command} status`\n"
+        f"Max count: `{_spam_max_count()}`"
+    )
+
+
+async def _safe_edit_message(message, text):
+    try:
+        return await message.edit_text(text)
+    except Exception:
+        try:
+            return await message.reply_text(text)
+        except Exception:
+            return None
 
 
 def _sender_user_id(message):
@@ -179,8 +218,184 @@ async def _resolve_self_target_user(client, message, arg_index=1):
     return None
 
 
+async def _resolve_pvlock_target_user(client, message, arg_index=2):
+    """Resolve PV lock target.
+
+    .pvlock on/off can be used by reply, by explicit username/id, or inside the
+    target user's private chat without an explicit target.
+    """
+    user = await _resolve_self_target_user(client, message, arg_index)
+    if user is not None:
+        return user
+    try:
+        me = await client.get_me()
+        if getattr(message.chat, "type", None) and str(message.chat.type).lower().endswith("private") and message.chat.id != me.id:
+            return await client.get_users(message.chat.id)
+    except Exception:
+        pass
+    return None
+
+
 def _target_label(user):
     return f"<a href=tg://user?id={user.id}>{html.escape(user.first_name or str(user.id))}</a>"
+
+
+def _ensure_pvlock_storage(data):
+    """Ensure per-user PV lock storage exists and avoid old global behavior."""
+    if not isinstance(data, dict):
+        data = {}
+    users_list = data.get("pvlock_users", [])
+    if not isinstance(users_list, list):
+        users_list = []
+    # New system is per-user; keep old key off/legacy-safe.
+    data["pvlock"] = "off"
+    data["pvlock_users"] = [int(x) for x in users_list if str(x).lstrip("-").isdigit()]
+    return data
+
+
+def _is_pvlocked(data, user_id):
+    data = _ensure_pvlock_storage(data)
+    return int(user_id) in set(int(x) for x in data.get("pvlock_users", []))
+
+
+# ================= Forced Join / Monshi2 helpers =================
+def _monshi2_defaults(data):
+    if not isinstance(data, dict):
+        data = {}
+    data.setdefault("monshi2", "off")
+    data.setdefault("forced_join_channels", [])
+    data.setdefault("forced_join_groups", [])
+    data.setdefault("forced_join_text", "🔐 برای ارسال پیام، ابتدا عضو کانال‌های زیر شوید.\nبعد از عضویت روی دکمه «✅ تأیید عضویت» بزنید.")
+    data.setdefault("forced_join_photo", "")
+    if not isinstance(data.get("forced_join_channels"), list):
+        data["forced_join_channels"] = []
+    if not isinstance(data.get("forced_join_groups"), list):
+        data["forced_join_groups"] = []
+    return data
+
+
+def _save_monshi2_data(data):
+    data = _monshi2_defaults(data)
+    write("data.json", json.dumps(data, ensure_ascii=False))
+
+
+def _clean_chat_ref(value):
+    value = str(value or "").strip()
+    value = value.replace("https://t.me/", "").replace("http://t.me/", "").replace("t.me/", "")
+    value = value.strip().strip("/")
+    if value.startswith("@"):
+        value = value[1:]
+    return value
+
+
+def _chat_url(username_or_id):
+    ref = str(username_or_id or "").strip()
+    if ref.startswith("-"):
+        return "https://t.me/"  # private/supergroup numeric ids have no public join URL
+    ref = _clean_chat_ref(ref)
+    return f"https://t.me/{ref}"
+
+
+def _join_item(kind, username, title=None):
+    ref = _clean_chat_ref(username)
+    return {
+        "type": kind,
+        "username": ref,
+        "title": (title or ref or kind).strip(),
+        "url": _chat_url(ref),
+    }
+
+
+def _monshi2_requirements(data):
+    data = _monshi2_defaults(data)
+    return list(data.get("forced_join_channels", [])) + list(data.get("forced_join_groups", []))
+
+
+async def _check_forced_join_membership(client, user_id, data):
+    missing = []
+    for item in _monshi2_requirements(data):
+        ref = item.get("username") or item.get("id") or item.get("url")
+        if not ref:
+            continue
+        chat_ref = ref if str(ref).startswith("-") else f"@{_clean_chat_ref(ref)}"
+        try:
+            member = await client.get_chat_member(chat_ref, int(user_id))
+            status = str(getattr(member, "status", "")).lower()
+            if any(x in status for x in ["left", "banned", "kicked"]):
+                missing.append(item)
+        except Exception:
+            missing.append(item)
+    return missing
+
+
+def _forced_join_fallback_text(data, missing=None):
+    data = _monshi2_defaults(data)
+    reqs = missing if missing is not None else _monshi2_requirements(data)
+    lines = [data.get("forced_join_text") or "🔐 عضویت اجباری فعال است.", ""]
+    for item in reqs:
+        icon = "📢" if item.get("type") == "channel" else "👥"
+        lines.append(f"{icon} {item.get('title', item.get('username', 'Join'))}: {item.get('url', '')}")
+    lines.append("\n✅ بعد از عضویت دوباره پیام بدهید یا تأیید عضویت را بزنید.")
+    return "\n".join(lines)
+
+
+def _encode_fj_payload(payload):
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_fj_payload(encoded):
+    encoded = str(encoded or "")
+    encoded += "=" * (-len(encoded) % 4)
+    return json.loads(base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8"))
+
+
+async def _send_forced_join_prompt(client, message, data, missing=None):
+    data = _monshi2_defaults(data)
+    reqs = missing if missing is not None else _monshi2_requirements(data)
+    if not reqs:
+        return
+
+    # Compact payload for Telegram inline query limits.
+    compact_reqs = []
+    for item in reqs:
+        compact_reqs.append([
+            "c" if item.get("type") == "channel" else "g",
+            item.get("username") or item.get("id") or "",
+            item.get("title") or item.get("username") or "Join",
+            item.get("url") or _chat_url(item.get("username") or item.get("id") or ""),
+        ])
+
+    payload = {
+        "u": message.chat.id,
+        "t": (data.get("forced_join_text", "") or "")[:350],
+        "r": compact_reqs,
+    }
+
+    # Optional photo: only include it if the final inline query stays reasonably short.
+    photo_path = data.get("forced_join_photo") or ""
+    if photo_path and os.path.isfile(photo_path):
+        try:
+            uploaded = await asyncio.to_thread(upload_file, photo_path)
+            if uploaded:
+                test_payload = dict(payload)
+                test_payload["p"] = "https://telegra.ph" + uploaded[0]
+                if len(f"fj|{_encode_fj_payload(test_payload)}") <= 900:
+                    payload = test_payload
+        except Exception as e:
+            print(f"Forced join photo upload failed: {e}")
+
+    encoded = _encode_fj_payload(payload)
+    query = f"fj|{encoded}"
+    try:
+        results = await client.get_inline_bot_results(bot_id, query)
+        if results and results.results:
+            await client.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
+            return
+    except Exception as e:
+        print(f"Forced join inline panel failed, using text fallback: {e}")
+
+    await client.send_message(message.chat.id, _forced_join_fallback_text(data, reqs))
 tabchitimer = []
 imdb = None
 
@@ -426,13 +641,17 @@ from pyrogram.types import (InlineQueryResultArticle, InputTextMessageContent,
 @app.on_message( filters.private , group=33)
 async def actions1(app, message):
  text = message.text
- json_database = json_read("data.json")
+ json_database = _ensure_pvlock_storage(json_read("data.json"))
  json_list = json_read("list.json")
  chat_id = message.chat.id
- if (json_database["pvlock"] == "on" and chat_id != admin):
-    await message.delete()
- elif (json_database["monshi"] == "on" and chat_id != admin):
-     if (json_list[f"{text}"]):
+ if (_is_pvlocked(json_database, chat_id) and str(chat_id) != str(admin)):
+    try:
+     await message.delete()
+    except Exception:
+     pass
+    return
+ elif (json_database.get("monshi") == "on" and chat_id != admin):
+     if (json_list.get(f"{text}")):
          ab = json_list[f"{text}"]
          await app.send_message(chat_id=chat_id,text=f"{ab}",reply_to_message_id=message.id)
  
@@ -455,21 +674,16 @@ def extract_transaction_link(input_text):
         
 @app.on_message(filters.private, group=3344)
 async def forward_to_channel(app, message):
-    json_database = json_read("data.json")
-    if json_database["monshi2"] == "on":
-        user_id = message.chat.id
-        if not await check_membership(channel_id, user_id):
-            await message.reply_text(f"""سلام دوست عزیز،
-**
-برای ارتباط با من  عضو کانال زیر شوید:
-
-{channel_id}
-**
-""")
-            await message.delete()
-        else:
-        # اگر کاربر عضو کانال بود، انجام دستورات دیگر
-            pass
+    data = _monshi2_defaults(json_read("data.json"))
+    if data.get("monshi2") == "on" and str(message.chat.id) != str(admin):
+        missing = await _check_forced_join_membership(app, message.chat.id, data)
+        if missing:
+            try:
+                await message.delete()
+            except Exception:
+                pass
+            await _send_forced_join_prompt(app, message, data, missing)
+            raise StopPropagation
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @app.on_message(filters.incoming , group=333)      
 async def mes(app, message):
@@ -1076,6 +1290,133 @@ async def sessions_list(app, message: Message):
     if len(chunk):
         await message.reply("\n\n".join(chunk))
     await message.delete()
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+async def _controlled_spam_runner(app, origin_message: Message, amount: int, payload: str, mode: str, status_message_id: int):
+    """Run a single controlled spam/repeat task per chat with cleanup."""
+    chat_id = origin_message.chat.id
+    key = chat_id
+    delay = _spam_delay_for_mode(mode)
+    meta = controlled_spam_tasks.get(key, {})
+    meta.update({"sent": 0, "total": amount, "mode": mode, "text": payload, "running": True})
+    controlled_spam_tasks[key] = meta
+    try:
+        for index in range(amount):
+            # Task cancellation is handled by asyncio.CancelledError, but this flag
+            # lets stop/cancel end gracefully between sends.
+            if not controlled_spam_tasks.get(key, {}).get("running", False):
+                break
+            try:
+                if origin_message.reply_to_message:
+                    sent = await origin_message.reply_to_message.reply(payload)
+                else:
+                    sent = await app.send_message(chat_id, payload)
+                meta["sent"] = index + 1
+                if mode == "statspam":
+                    await asyncio.sleep(0.15)
+                    try:
+                        await sent.delete()
+                    except Exception:
+                        pass
+                await asyncio.sleep(delay)
+            except FloodWait as fw:
+                wait_time = int(getattr(fw, "value", getattr(fw, "x", 1))) + 1
+                meta["last_error"] = f"FloodWait {wait_time}s"
+                await asyncio.sleep(wait_time)
+            except RPCError as rpc_error:
+                meta["last_error"] = str(rpc_error)
+                await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:
+                meta["last_error"] = str(err)
+                await asyncio.sleep(1)
+        final_sent = meta.get("sent", 0)
+        try:
+            await app.edit_message_text(chat_id, status_message_id, f"❖ Spam finished. Sent `{final_sent}/{amount}` message(s).")
+        except Exception:
+            pass
+    except asyncio.CancelledError:
+        sent = meta.get("sent", 0)
+        try:
+            await app.edit_message_text(chat_id, status_message_id, f"❖ Spam cancelled. Sent `{sent}/{amount}` message(s).")
+        except Exception:
+            pass
+    finally:
+        controlled_spam_tasks.pop(key, None)
+
+
+@app.on_message(filters.command(["spam", "statspam", "slowspam", "fastspam"], ".") & filters.me, group=-50)
+async def controlled_spam(app, message: Message):
+    """Controlled replacement for spam commands.
+
+    Preserves existing syntax `.spam NUM TEXT` while adding:
+    start / stop / cancel / status, one task per chat, FloodWait handling,
+    and exact count execution.
+    """
+    command = (message.command[0] if getattr(message, "command", None) else "spam").lower()
+    parts = (message.text or "").split(maxsplit=3)
+    chat_id = message.chat.id
+
+    # Subcommands: .spam stop | .spam cancel | .spam status
+    if len(parts) >= 2 and parts[1].lower() in ["stop", "cancel"]:
+        task_data = controlled_spam_tasks.get(chat_id)
+        if not task_data:
+            await _safe_edit_message(message, "❖ No active spam task in this chat.")
+        else:
+            task_data["running"] = False
+            task = task_data.get("task")
+            if task and not task.done():
+                task.cancel()
+            await _safe_edit_message(message, f"❖ Spam {parts[1].lower()} requested. Sent `{task_data.get('sent', 0)}/{task_data.get('total', 0)}`.")
+        raise StopPropagation
+
+    if len(parts) >= 2 and parts[1].lower() == "status":
+        task_data = controlled_spam_tasks.get(chat_id)
+        if not task_data:
+            await _safe_edit_message(message, "❖ No active spam task in this chat.")
+        else:
+            extra = f"\nLast error: `{task_data.get('last_error')}`" if task_data.get("last_error") else ""
+            await _safe_edit_message(message, f"❖ Spam status: `{task_data.get('sent', 0)}/{task_data.get('total', 0)}` sent. Mode: `{task_data.get('mode')}`{extra}")
+        raise StopPropagation
+
+    # Start syntax: .spam start 10 text OR .spam 10 text
+    arg_offset = 1
+    if len(parts) >= 2 and parts[1].lower() == "start":
+        arg_offset = 2
+
+    args = (message.text or "").split(maxsplit=arg_offset + 1)
+    if len(args) <= arg_offset:
+        await _safe_edit_message(message, _spam_usage(command))
+        raise StopPropagation
+
+    try:
+        amount = int(args[arg_offset])
+    except Exception:
+        await _safe_edit_message(message, _spam_usage(command))
+        raise StopPropagation
+
+    max_count = _spam_max_count()
+    if amount < 1 or amount > max_count:
+        await _safe_edit_message(message, f"❖ Count must be between `1` and `{max_count}`.")
+        raise StopPropagation
+
+    if len(args) <= arg_offset + 1 or not args[arg_offset + 1].strip():
+        await _safe_edit_message(message, _spam_usage(command))
+        raise StopPropagation
+    payload = args[arg_offset + 1]
+
+    active = controlled_spam_tasks.get(chat_id)
+    if active and active.get("task") and not active["task"].done():
+        await _safe_edit_message(message, f"❖ A spam task is already active here: `{active.get('sent', 0)}/{active.get('total', 0)}`. Use `.{command} stop` first.")
+        raise StopPropagation
+
+    status = await _safe_edit_message(message, f"❖ Spam started: `{amount}` message(s). Mode: `{command}`\nUse `.{command} stop` or `.{command} status`.")
+    status_message_id = getattr(status, "id", message.id)
+    task = asyncio.create_task(_controlled_spam_runner(app, message, amount, payload, command, status_message_id))
+    controlled_spam_tasks[chat_id] = {"task": task, "sent": 0, "total": amount, "mode": command, "text": payload, "running": True}
+    raise StopPropagation
+
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @app.on_message(
     filters.command(["spam", "statspam", "slowspam"], ".") & filters.me
@@ -5273,6 +5614,84 @@ def autoanwer(app, m:Message):
     num = 0
     
 
+@app.on_message(filters.command(["pvlock"], ".") & filters.me, group=-50)
+async def safe_pvlock_command(app, message: Message):
+    """Per-user PV lock manager.
+
+    Commands:
+    .pvlock on              (reply or private chat target)
+    .pvlock on @username
+    .pvlock off             (reply or private chat target)
+    .pvlock off @username
+    .pvlock list
+    .pvlock clear
+    """
+    try:
+        data = _ensure_pvlock_storage(json_read("data.json"))
+        parts = (message.text or "").split()
+        action = parts[1].lower() if len(parts) >= 2 else ""
+        users_set = set(int(x) for x in data.get("pvlock_users", []))
+
+        if action == "list":
+            if not users_set:
+                await message.edit_text("❖ PV Lock list is empty.")
+                raise StopPropagation
+            rows = []
+            for index, uid in enumerate(sorted(users_set), start=1):
+                try:
+                    user = await app.get_users(uid)
+                    rows.append(f"{index}. {_target_label(user)} — `{uid}`")
+                except Exception:
+                    rows.append(f"{index}. `{uid}`")
+            await message.edit_text("❖ **PV Lock Users:**\n" + "\n".join(rows))
+            raise StopPropagation
+
+        if action == "clear":
+            count = len(users_set)
+            data["pvlock_users"] = []
+            data["pvlock"] = "off"
+            write("data.json", json.dumps(data))
+            await message.edit_text(f"❖ PV Lock list cleared. Removed `{count}` user(s).")
+            raise StopPropagation
+
+        if action not in ["on", "off"]:
+            await message.edit_text("❖ Usage:\n`.pvlock on` / `.pvlock off` as reply or in target PV\n`.pvlock on USER_ID/@username`\n`.pvlock list`\n`.pvlock clear`")
+            raise StopPropagation
+
+        user = await _resolve_pvlock_target_user(app, message, 2)
+        if user is None:
+            await message.edit_text("❖ Target not found. Reply to a user or use `.pvlock on USER_ID/@username`.")
+            raise StopPropagation
+
+        if user.id == (await app.get_me()).id:
+            await message.edit_text("❖ You cannot PV-lock yourself.")
+            raise StopPropagation
+
+        if action == "on":
+            if user.id not in users_set:
+                users_set.add(user.id)
+                data["pvlock_users"] = sorted(users_set)
+                data["pvlock"] = "off"
+                write("data.json", json.dumps(data))
+                await message.edit_text(f"❖ PV Lock enabled for {_target_label(user)}.")
+            else:
+                await message.edit_text(f"❖ PV Lock is already enabled for {_target_label(user)}.")
+        else:
+            if user.id in users_set:
+                users_set.remove(user.id)
+                data["pvlock_users"] = sorted(users_set)
+                data["pvlock"] = "off"
+                write("data.json", json.dumps(data))
+                await message.edit_text(f"❖ PV Lock disabled for {_target_label(user)}.")
+            else:
+                await message.edit_text(f"❖ PV Lock was not enabled for {_target_label(user)}.")
+    except StopPropagation:
+        raise
+    except Exception as e:
+        await message.edit_text(f"❖ **ERROR**:\n`{e}`")
+    raise StopPropagation
+
+
 @app.on_message(filters.command(["block", "unblock"], ".") & filters.me, group=-50)
 async def safe_block_unblock(app, message: Message):
     """Reliable block/unblock with reply, username/id, and temporary block timer.
@@ -5340,6 +5759,128 @@ async def safe_block_unblock(app, message: Message):
                 old_task.cancel()
             await app.unblock_user(target_id)
             await message.edit_text(f"❖ {label} unblocked.")
+    except Exception as e:
+        await message.edit_text(f"❖ **ERROR**:\n`{e}`")
+    raise StopPropagation
+
+
+
+@app.on_message(filters.command(["monshi2"], ".") & filters.me, group=-50)
+async def safe_monshi2_command(app, message: Message):
+    """Professional Forced Join manager for private messages.
+
+    Commands:
+    .monshi2 on / off
+    .monshi2 addchannel @channel Title
+    .monshi2 delchannel @channel
+    .monshi2 addgroup @group Title
+    .monshi2 delgroup @group
+    .monshi2 list
+    .monshi2 text Your custom text
+    .monshi2 photo        (reply to a photo)
+    .monshi2 delphoto
+    """
+    try:
+        data = _monshi2_defaults(json_read("data.json"))
+        parts = (message.text or "").split(maxsplit=3)
+        action = parts[1].lower() if len(parts) >= 2 else ""
+
+        if action in ["on", "off"]:
+            data["monshi2"] = action
+            _save_monshi2_data(data)
+            await message.edit_text(f"❖ Monshi2 Forced Join is **{action.upper()}**")
+            raise StopPropagation
+
+        if action in ["addchannel", "addgroup"]:
+            if len(parts) < 3:
+                await message.edit_text(f"❖ Usage: `.monshi2 {action} @username Title`")
+                raise StopPropagation
+            kind = "channel" if action == "addchannel" else "group"
+            ref = _clean_chat_ref(parts[2])
+            title = parts[3] if len(parts) >= 4 else ref
+            item = _join_item(kind, ref, title)
+            key = "forced_join_channels" if kind == "channel" else "forced_join_groups"
+            data[key] = [x for x in data.get(key, []) if _clean_chat_ref(x.get("username")) != ref]
+            data[key].append(item)
+            _save_monshi2_data(data)
+            await message.edit_text(f"❖ Added {kind}: `{item['title']}` → @{ref}")
+            raise StopPropagation
+
+        if action in ["delchannel", "delgroup"]:
+            if len(parts) < 3:
+                await message.edit_text(f"❖ Usage: `.monshi2 {action} @username`")
+                raise StopPropagation
+            kind = "channel" if action == "delchannel" else "group"
+            ref = _clean_chat_ref(parts[2])
+            key = "forced_join_channels" if kind == "channel" else "forced_join_groups"
+            before = len(data.get(key, []))
+            data[key] = [x for x in data.get(key, []) if _clean_chat_ref(x.get("username")) != ref]
+            _save_monshi2_data(data)
+            removed = before - len(data.get(key, []))
+            await message.edit_text(f"❖ Removed `{removed}` {kind}(s) for @{ref}.")
+            raise StopPropagation
+
+        if action == "list":
+            reqs = _monshi2_requirements(data)
+            if not reqs:
+                await message.edit_text("❖ Forced Join list is empty.")
+                raise StopPropagation
+            lines = [f"❖ **Monshi2:** `{data.get('monshi2')}`", ""]
+            for i, item in enumerate(reqs, start=1):
+                icon = "📢" if item.get("type") == "channel" else "👥"
+                lines.append(f"{i}. {icon} {item.get('title')} — @{item.get('username')}")
+            lines.append("\nText: " + (data.get("forced_join_text") or "—")[:400])
+            lines.append("Photo: " + ("✅" if data.get("forced_join_photo") else "❌"))
+            await message.edit_text("\n".join(lines))
+            raise StopPropagation
+
+        if action == "text":
+            if len(parts) < 3:
+                await message.edit_text("❖ Usage: `.monshi2 text Your custom message`")
+                raise StopPropagation
+            # Everything after '.monshi2 text '
+            custom_text = (message.text or "").split(maxsplit=2)[2]
+            data["forced_join_text"] = custom_text
+            _save_monshi2_data(data)
+            await message.edit_text("❖ Forced Join text updated.")
+            raise StopPropagation
+
+        if action == "photo":
+            if not message.reply_to_message or not getattr(message.reply_to_message, "photo", None):
+                await message.edit_text("❖ Reply to a photo with `.monshi2 photo`")
+                raise StopPropagation
+            path = await app.download_media(message.reply_to_message, file_name="forced_join_photo.jpg")
+            data["forced_join_photo"] = path
+            _save_monshi2_data(data)
+            await message.edit_text("❖ Forced Join photo updated.")
+            raise StopPropagation
+
+        if action == "delphoto":
+            old = data.get("forced_join_photo")
+            if old and os.path.isfile(old):
+                try:
+                    os.remove(old)
+                except Exception:
+                    pass
+            data["forced_join_photo"] = ""
+            _save_monshi2_data(data)
+            await message.edit_text("❖ Forced Join photo removed.")
+            raise StopPropagation
+
+        await message.edit_text(
+            "❖ Monshi2 commands:\n"
+            "`.monshi2 on` / `.monshi2 off`\n"
+            "`.monshi2 addchannel @channel Title`\n"
+            "`.monshi2 delchannel @channel`\n"
+            "`.monshi2 addgroup @group Title`\n"
+            "`.monshi2 delgroup @group`\n"
+            "`.monshi2 list`\n"
+            "`.monshi2 text Your message`\n"
+            "`.monshi2 photo` (reply photo)\n"
+            "`.monshi2 delphoto`"
+        )
+    except StopPropagation:
+        raise
     except Exception as e:
         await message.edit_text(f"❖ **ERROR**:\n`{e}`")
     raise StopPropagation
