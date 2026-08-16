@@ -109,7 +109,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-16-phase4-monshi2-forced-join-v4"
+FIX_VERSION = "2026-08-16-phase4-monshi2-final-fix-v4-1"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -369,6 +369,13 @@ async def _send_forced_join_prompt(client, message, data, missing=None):
             compact_parts.append(f"{kind}:{ref}")
 
     query = f"fj2|{message.chat.id}|" + ",".join(compact_parts)
+
+    # Optional custom text. Keep compact so Telegram inline query does not fail.
+    custom_text = (data.get("forced_join_text", "") or "").strip()
+    if custom_text:
+        text_query = query + "|t:" + urllib.parse.quote(custom_text[:90], safe="")
+        if len(text_query) <= 240:
+            query = text_query
 
     # Optional configured photo. Keep query under Telegram inline query limits;
     # if too long, we still send the text panel with buttons instead of failing.
