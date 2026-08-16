@@ -1,7 +1,7 @@
 #============ In The Name Of God ============#
-# Source Name: TiTaN SelfSaz
-# Developer: t.me/code_watch
-# © 2024 TiTaN SelfSaz LLC. All rights reserved.
+# Source Name: Ultra Self
+# Developer: @IVGalaxy
+# © 2024 Ultra Self LLC. All rights reserved.
 #================== Import ==================#
 from pyrogram import Client, filters, idle, errors, StopPropagation
 from pyrogram.types import *
@@ -3805,6 +3805,71 @@ one_time_keyboard=True,resize_keyboard=True)
 @app.on_inline_query()
 async def answer(client, inline_query):
      chat_id = inline_query.from_user.id
+     if inline_query.query.startswith("fj2|"):
+          try:
+               # Compact forced-join payload: fj2|USER_ID|c:channel1,c:channel2,g:group
+               parts = inline_query.query.split("|")
+               target_uid = int(parts[1]) if len(parts) > 1 and str(parts[1]).isdigit() else inline_query.from_user.id
+               compact_items = parts[2].split(",") if len(parts) > 2 and parts[2] else []
+               photo_url = None
+               if len(parts) > 3 and parts[3].startswith("p:"):
+                    try:
+                         from urllib.parse import unquote
+                         photo_url = unquote(parts[3][2:])
+                    except Exception:
+                         photo_url = None
+               reqs = []
+               for raw in compact_items:
+                    if not raw or ":" not in raw:
+                         continue
+                    kind_code, ref = raw.split(":", 1)
+                    ref = ref.strip().lstrip("@")
+                    if not ref:
+                         continue
+                    reqs.append({
+                         "type": "channel" if kind_code == "c" else "group",
+                         "username": ref,
+                         "title": ref,
+                         "url": f"https://t.me/{ref}" if not ref.startswith("-") else "https://t.me/",
+                    })
+               payload = {
+                    "u": target_uid,
+                    "t": "🔐 عضویت اجباری فعال است. لطفاً عضو لینک‌های زیر شوید و سپس تأیید عضویت را بزنید.",
+                    "r": reqs,
+               }
+               if photo_url:
+                    payload["p"] = photo_url
+               keyboard = _fj_keyboard(payload)
+               if photo_url:
+                    result = InlineQueryResultPhoto(
+                         title="🔐 Forced Join",
+                         description="Join required channels/groups",
+                         photo_url=photo_url,
+                         thumb_url=photo_url,
+                         caption=_fj_text(payload),
+                         reply_markup=keyboard
+                    )
+               else:
+                    result = InlineQueryResultArticle(
+                         title="🔐 Forced Join",
+                         description="Join required channels/groups",
+                         input_message_content=InputTextMessageContent(_fj_text(payload)),
+                         reply_markup=keyboard
+                    )
+               await inline_query.answer(results=[result], cache_time=1, is_personal=True)
+          except Exception as exc:
+               print(f"{Fore.YELLOW}Forced Join compact inline generation failed: {exc}{Fore.RESET}")
+               await inline_query.answer(
+                    results=[InlineQueryResultArticle(
+                         title="Forced Join",
+                         description="Join required channels/groups",
+                         input_message_content=InputTextMessageContent("🔐 عضویت اجباری فعال است؛ لطفاً دوباره پیام بدهید.")
+                    )],
+                    cache_time=1,
+                    is_personal=True
+               )
+          return
+
      if inline_query.query.startswith("fj|"):
           try:
                payload = _fj_decode_payload(inline_query.query.split("|", 1)[1])
