@@ -1,7 +1,7 @@
 #============ In The Name Of God ============#
-# Source Name: Ultra Self
-# Developer: @IVGalaxy
-# © 2024 Ultra Self LLC. All rights reserved.
+# Source Name: TiTaN SelfSaz
+# Developer: t.me/code_watch
+# © 2024 TiTaN SelfSaz LLC. All rights reserved.
 #================== Import ==================#
 from pyrogram import Client, filters, idle, errors, StopPropagation
 from pyrogram.types import *
@@ -15,10 +15,11 @@ import os
 import asyncio
 import hashlib
 import time
+import base64
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-13-titan-paginated-help-v10-7"
+FIX_VERSION = "2026-08-16-phase4-monshi2-forced-join-v4"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -3696,6 +3697,96 @@ async def _titan_inline_photo_url(client, user):
      return url
 
 
+
+# ================= Forced Join Inline Panel =================
+_FORCED_JOIN_CACHE = {}
+
+
+def _fj_decode_payload(encoded):
+     encoded = str(encoded or "")
+     encoded += "=" * (-len(encoded) % 4)
+     return json.loads(base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8"))
+
+
+def _fj_cache_key(payload):
+     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
+
+
+def _fj_items(payload):
+     """Normalize forced-join requirements from compact or verbose payload."""
+     raw_items = payload.get("r", []) if isinstance(payload, dict) else []
+     items = []
+     for raw in raw_items:
+          if isinstance(raw, (list, tuple)):
+               kind_code = raw[0] if len(raw) > 0 else "c"
+               username = raw[1] if len(raw) > 1 else ""
+               title = raw[2] if len(raw) > 2 else username
+               url = raw[3] if len(raw) > 3 else (f"https://t.me/{str(username).lstrip('@')}" if username else "https://t.me/")
+               items.append({
+                    "type": "channel" if kind_code == "c" else "group",
+                    "username": str(username).lstrip("@"),
+                    "title": title or username or "Join",
+                    "url": url or "https://t.me/",
+               })
+          elif isinstance(raw, dict):
+               item = dict(raw)
+               if item.get("username"):
+                    item["username"] = str(item["username"]).lstrip("@")
+               item.setdefault("title", item.get("username", "Join"))
+               item.setdefault("url", f"https://t.me/{item.get('username')}" if item.get("username") else "https://t.me/")
+               item.setdefault("type", "channel")
+               items.append(item)
+     return items
+
+
+def _fj_payload_user_id(payload):
+     return payload.get("uid") or payload.get("u")
+
+
+def _fj_keyboard(payload):
+     reqs = _fj_items(payload)
+     token = _fj_cache_key(payload)
+     _FORCED_JOIN_CACHE[token] = payload
+     rows = []
+     # Glass-style URL buttons: two buttons per row, then one full-width verify button.
+     current = []
+     for item in reqs:
+          title = item.get("title") or item.get("username") or "Join"
+          icon = "📢" if item.get("type") == "channel" else "👥"
+          url = item.get("url") or "https://t.me/"
+          current.append(InlineKeyboardButton(f"{icon} {title} ↗", url=url))
+          if len(current) == 2:
+               rows.append(current)
+               current = []
+     if current:
+          rows.append(current)
+     rows.append([InlineKeyboardButton("✅ تأیید عضویت", callback_data=f"fjv-{token}")])
+     return InlineKeyboardMarkup(rows)
+
+
+async def _fj_missing_memberships(user_id, payload):
+     missing = []
+     for item in _fj_items(payload):
+          ref = item.get("username") or item.get("id")
+          if not ref:
+               continue
+          chat_ref = ref if str(ref).startswith("-") else f"@{str(ref).lstrip('@')}"
+          try:
+               member = await app.get_chat_member(chat_ref, int(user_id))
+               status = str(getattr(member, "status", "")).lower()
+               if any(x in status for x in ["left", "banned", "kicked"]):
+                    missing.append(item)
+          except Exception:
+               missing.append(item)
+     return missing
+
+
+def _fj_text(payload):
+     base = payload.get("t") or "🔐 برای ارسال پیام، ابتدا عضو کانال‌های زیر شوید.\nبعد از عضویت روی دکمه «✅ تأیید عضویت» بزنید."
+     return base
+
+
 keyboard_idk = ReplyKeyboardMarkup(
      [
          [
@@ -3714,6 +3805,42 @@ one_time_keyboard=True,resize_keyboard=True)
 @app.on_inline_query()
 async def answer(client, inline_query):
      chat_id = inline_query.from_user.id
+     if inline_query.query.startswith("fj|"):
+          try:
+               payload = _fj_decode_payload(inline_query.query.split("|", 1)[1])
+               text = _fj_text(payload)
+               keyboard = _fj_keyboard(payload)
+               photo_url = payload.get("p")
+               if photo_url:
+                    result = InlineQueryResultPhoto(
+                         title="🔐 Forced Join",
+                         description="Join required channels/groups",
+                         photo_url=photo_url,
+                         thumb_url=photo_url,
+                         caption=text,
+                         reply_markup=keyboard
+                    )
+               else:
+                    result = InlineQueryResultArticle(
+                         title="🔐 Forced Join",
+                         description="Join required channels/groups",
+                         input_message_content=InputTextMessageContent(text),
+                         reply_markup=keyboard
+                    )
+               await inline_query.answer(results=[result], cache_time=1, is_personal=True)
+          except Exception as exc:
+               print(f"{Fore.YELLOW}Forced Join inline generation failed: {exc}{Fore.RESET}")
+               await inline_query.answer(
+                    results=[InlineQueryResultArticle(
+                         title="Forced Join Error",
+                         description="Could not build forced join panel",
+                         input_message_content=InputTextMessageContent("🔐 عضویت اجباری فعال است؛ لطفاً لینک‌های عضویت را از پیام بعدی بررسی کنید.")
+                    )],
+                    cache_time=1,
+                    is_personal=True
+               )
+          return
+
      AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = {chat_id} LIMIT 1")
      if AdminUser is not None:
           if inline_query.query.strip().lower() in ["panel", "help", "helper"] or inline_query.query.strip() in ["پنل", "راهنما"]:
@@ -3881,6 +4008,33 @@ async def answer(client, inline_query):
 @app.on_callback_query()
 async def call(app, call):
      AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = '{call.from_user.id}' LIMIT 1")
+
+     if call.data and call.data.startswith("fjv-"):
+          token = call.data.split("-", 1)[1]
+          payload = _FORCED_JOIN_CACHE.get(token)
+          if not payload:
+               await call.answer("❌ درخواست منقضی شده؛ دوباره پیام بدهید.", show_alert=True)
+               return
+          target_uid = _fj_payload_user_id(payload)
+          if target_uid and int(target_uid) != int(call.from_user.id):
+               await call.answer("❌ این دکمه برای شما نیست.", show_alert=True)
+               return
+          missing = await _fj_missing_memberships(call.from_user.id, payload)
+          if missing:
+               names = "\n".join([f"• {x.get('title', x.get('username', 'Join'))}" for x in missing])
+               await call.answer("❌ عضویت کامل نیست", show_alert=True)
+               text = f"❌ عضویت کامل نیست\n\nموارد باقی‌مانده:\n{names}"
+          else:
+               await call.answer("✅ عضویت تأیید شد", show_alert=True)
+               text = "✅ عضویت تأیید شد\n🔓 دسترسی شما فعال شد. اکنون می‌توانید پیام ارسال کنید."
+          try:
+               if getattr(call, "inline_message_id", None):
+                    await app.edit_inline_text(inline_message_id=call.inline_message_id, text=text, reply_markup=None)
+               elif getattr(call, "message", None):
+                    await app.edit_message_text(call.message.chat.id, call.message.id, text, reply_markup=None)
+          except Exception:
+               pass
+          return
 
      mark1 = InlineKeyboardMarkup(
           [
