@@ -1,7 +1,7 @@
 #============ In The Name Of God ============#
-# Source Name: Ultra Self
-# Upgraded By @IVGalaxy
-# © 2024 Ultra Self LLC. All rights reserved.
+# Source Name: TiTaN SelfSaz
+# Programmer : t.me/code_watch
+# © 2024 TiTaN SeldSaz LLC. All rights reserved.
 #=========================================#
 from colorama import Fore, init
 from pyrogram import Client, filters, idle , errors ,enums
@@ -98,7 +98,7 @@ from pyrogram.raw.functions.messages import GetStickerSet
 from pyrogram.raw.types import InputStickerSetShortName
 from PIL import Image, ImageOps
 import time
-from pyrogram import ContinuePropagation
+from pyrogram import ContinuePropagation, StopPropagation
 from pyrogram.errors import RPCError
 from pyrogram.raw.functions.account import GetAuthorizations, ResetAuthorization
 from pyrogram.raw.types import UpdateServiceNotification
@@ -109,7 +109,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-07-self-startup-deepfix-v8"
+FIX_VERSION = "2026-08-16-phase1-block-love-target-fix-v1"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -126,6 +126,61 @@ enemy = []
 love = []
 fal = []
 mutey = []
+temporary_block_tasks = {}
+
+
+def _sender_user_id(message):
+    """Return the real sender user id for incoming messages."""
+    if getattr(message, "from_user", None):
+        return message.from_user.id
+    return None
+
+
+def _is_duration_token(value):
+    return bool(value and re.fullmatch(r"\d+[smhd]", str(value).strip().lower()))
+
+
+def _parse_duration_to_seconds(value):
+    """Parse 2h, 30m, 1d, 45s into seconds. Returns None if invalid/missing."""
+    if not value:
+        return None
+    match_obj = re.fullmatch(r"(\d+)([smhd])", str(value).strip().lower())
+    if not match_obj:
+        return None
+    amount = int(match_obj.group(1))
+    unit = match_obj.group(2)
+    return amount * {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
+
+
+def _format_duration(seconds):
+    seconds = int(seconds)
+    if seconds % 86400 == 0:
+        return f"{seconds // 86400}d"
+    if seconds % 3600 == 0:
+        return f"{seconds // 3600}h"
+    if seconds % 60 == 0:
+        return f"{seconds // 60}m"
+    return f"{seconds}s"
+
+
+async def _resolve_self_target_user(client, message, arg_index=1):
+    """Resolve target user from reply or command argument.
+
+    Supports:
+    - replying to a user's message
+    - numeric user id
+    - username
+    """
+    if getattr(message, "reply_to_message", None) and getattr(message.reply_to_message, "from_user", None):
+        return message.reply_to_message.from_user
+    parts = (message.text or "").split()
+    if len(parts) > arg_index:
+        return await client.get_users(parts[arg_index])
+    return None
+
+
+def _target_label(user):
+    return f"<a href=tg://user?id={user.id}>{html.escape(user.first_name or str(user.id))}</a>"
 tabchitimer = []
 imdb = None
 
@@ -416,16 +471,19 @@ async def forward_to_channel(app, message):
         # اگر کاربر عضو کانال بود، انجام دستورات دیگر
             pass
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@app.on_message(filters.incoming , group=333)       
+@app.on_message(filters.incoming , group=333)      
 async def mes(app, message):
-    if message and message.chat.id in enemy:
+    sender_id = _sender_user_id(message)
+    # Enemy/Love must be based on the sender USER ID, not group/chat id.
+    # This prevents one tagged user from affecting every member in a group.
+    if sender_id is not None and sender_id in enemy:
         try:
             s = fosh_saz(text=".")
             await message.reply(s)
             await asyncio.sleep(1)
         except Exception as ssss:
-            print()
-    elif message and message.chat.id in love:
+            print(ssss)
+    elif sender_id is not None and sender_id in love:
         try:
             l = ["❤️","💖","💝","💞","💕","💘","💗","💓"]
             lo = choice(l)
@@ -2750,49 +2808,123 @@ async def cats1(app, m: Message):
     response = requests.get("https://some-random-api.com/img/pikachu").json()
     await app.send_photo(m.chat.id,response["link"],caption = f"This is my love ...",reply_to_message_id=m.id)
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@app.on_message(filters.command(["delenemy"], ".") & filters.me)
-async def delenemy(app, message: Message):
-        id = message.reply_to_message.chat.id
-        try:
-            enemy.remove(message.reply_to_message.chat.id)
-            await app.edit_message_text(message.chat.id, message.id, f"{message.reply_to_message.from_user.mention}\n❈**Enemy** Deleted from list.")
-        except Exception as ki:
-            await app.edit_message_text(message.chat.id, message.id,
-                                            "❈This **id**  does not exist in enemy list. %s" % ki)
-@app.on_message(filters.command(["enemylist"], ".") & filters.me)  
-async def enemylist(app, message: Message):
-        string = enemy
-        await app.edit_message_text(message.chat.id, message.id, "❈**E**nemy List:%s" % string)
-@app.on_message(filters.command(["setenemy"], ".") & filters.me)  
-async def setenemy(app, message: Message):
-        ss = message.reply_to_message.chat.id
-        try:
-            enemy.append(message.reply_to_message.chat.id)
-            await app.edit_message_text(message.chat.id, message.id, f"{message.reply_to_message.from_user.mention}\n❈**Added** To Enemy List.")
-        except Exception as m:
-            await app.edit_message_text(message.chat.id, message.id, f"{message.reply_to_message.from_user.mention}\n❈**User** In Enemy List %s ." % m)
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@app.on_message(filters.command(["dellove"], ".") & filters.me)
-async def dellove(app, message: Message):
-        id = message.reply_to_message.chat.id
-        try:
-            love.remove(message.reply_to_message.chat.id)
-            await app.edit_message_text(message.chat.id, message.id, f"{message.reply_to_message.from_user.mention}\n❈**LOVE** Deleted from list.")
-        except Exception as ki:
-            await app.edit_message_text(message.chat.id, message.id,
-                                            "❈This **id**  does not exist in LOVE list. %s" % ki)
-@app.on_message(filters.command(["lovelist"], ".") & filters.me)  
-async def lovelist(app, message: Message):
-        string = love
-        await app.edit_message_text(message.chat.id, message.id, "❈**L**ove List:%s" % string)
-@app.on_message(filters.command(["setlove"], ".") & filters.me)  
-async def setlove(app, message: Message):
-        ss = message.reply_to_message.chat.id
-        try:
-            love.append(message.reply_to_message.chat.id)
-            await app.edit_message_text(message.chat.id, message.id, f"{message.reply_to_message.from_user.mention}\n❈**Added** To LOVE List.")
-        except Exception as m:
-            await app.edit_message_text(message.chat.id, message.id, f"{message.reply_to_message.from_user.mention}\n❈**User** In LOVE List %s ." % m)
+@app.on_message(filters.command(["setenemy", "delenemy", "clearenemy", "enemylist"], ".") & filters.me, group=-50)
+async def safe_enemy_commands(app, message: Message):
+    """Enemy list management fixed to store real target USER IDs, never chat IDs.
+
+    This prevents a whole group from being affected when one member is added.
+    """
+    global enemy
+    command = (message.command[0] if getattr(message, "command", None) else "").lower()
+    try:
+        if command == "clearenemy":
+            if enemy:
+                old = list(enemy)
+                enemy.clear()
+                await message.edit_text(f"❖ Enemy list cleared. Removed `{len(old)}` user(s).")
+            else:
+                await message.edit_text("❖ Enemy List is empty.")
+            raise StopPropagation
+
+        if command == "enemylist":
+            if not enemy:
+                await message.edit_text("❖ **Enemy List is empty**")
+                raise StopPropagation
+            rows = []
+            for index, user_id in enumerate(enemy, start=1):
+                try:
+                    user = await app.get_users(user_id)
+                    rows.append(f"{index}. <a href=tg://user?id={user.id}>{html.escape(user.first_name or str(user.id))}</a> — `{user.id}`")
+                except Exception:
+                    rows.append(f"{index}. `{user_id}`")
+            await message.edit_text("❖ **Enemy List:**\n" + "\n".join(rows))
+            raise StopPropagation
+
+        user = await _resolve_self_target_user(app, message)
+        if user is None:
+            await message.edit_text(f"❖ Reply to a user or send `.{command} USER_ID/@username`")
+            raise StopPropagation
+
+        target_id = user.id
+        label = _target_label(user)
+        if command == "setenemy":
+            if target_id == (await app.get_me()).id:
+                await message.edit_text("❖ You cannot add yourself to Enemy list.")
+            elif target_id not in enemy:
+                enemy.append(target_id)
+                await message.edit_text(f"❖ {label} added to Enemy list.")
+            else:
+                await message.edit_text(f"❖ {label} already exists in Enemy list.")
+        elif command == "delenemy":
+            if target_id in enemy:
+                enemy.remove(target_id)
+                await message.edit_text(f"❖ {label} removed from Enemy list.")
+            else:
+                await message.edit_text(f"❖ {label} is not in Enemy list.")
+    except StopPropagation:
+        raise
+    except Exception as e:
+        await message.edit_text(f"❖ **ERROR**:\n`{e}`")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["setlove", "dellove", "clearlove", "lovelist"], ".") & filters.me, group=-50)
+async def safe_love_commands(app, message: Message):
+    """LOVE list management fixed to store real target USER IDs, never chat IDs."""
+    global love
+    command = (message.command[0] if getattr(message, "command", None) else "").lower()
+    try:
+        if command == "clearlove":
+            if love:
+                old = list(love)
+                love.clear()
+                await message.edit_text(f"❖ LOVE list cleared. Removed `{len(old)}` user(s).")
+            else:
+                await message.edit_text("❖ LOVE List is empty.")
+            raise StopPropagation
+
+        if command == "lovelist":
+            if not love:
+                await message.edit_text("❖ **LOVE List is empty**")
+                raise StopPropagation
+            rows = []
+            for index, user_id in enumerate(love, start=1):
+                try:
+                    user = await app.get_users(user_id)
+                    rows.append(f"{index}. <a href=tg://user?id={user.id}>{html.escape(user.first_name or str(user.id))}</a> — `{user.id}`")
+                except Exception:
+                    rows.append(f"{index}. `{user_id}`")
+            await message.edit_text("❖ **LOVE List:**\n" + "\n".join(rows))
+            raise StopPropagation
+
+        user = await _resolve_self_target_user(app, message)
+        if user is None:
+            await message.edit_text(f"❖ Reply to a user or send `.{command} USER_ID/@username`")
+            raise StopPropagation
+
+        target_id = user.id
+        label = _target_label(user)
+        if command == "setlove":
+            if target_id == (await app.get_me()).id:
+                await message.edit_text("❖ You cannot add yourself to LOVE list.")
+            elif target_id not in love:
+                love.append(target_id)
+                await message.edit_text(f"❖ {label} added to LOVE list.")
+            else:
+                await message.edit_text(f"❖ {label} already exists in LOVE list.")
+        elif command == "dellove":
+            if target_id in love:
+                love.remove(target_id)
+                await message.edit_text(f"❖ {label} removed from LOVE list.")
+            else:
+                await message.edit_text(f"❖ {label} is not in LOVE list.")
+    except StopPropagation:
+        raise
+    except Exception as e:
+        await message.edit_text(f"❖ **ERROR**:\n`{e}`")
+    raise StopPropagation
+
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @app.on_message(filters.command(["filter"], ".") | filters.me & users)
 async def green(app, m: Message):
@@ -5140,6 +5272,79 @@ def autoanwer(app, m:Message):
     sleep(9)
     num = 0
     
+
+@app.on_message(filters.command(["block", "unblock"], ".") & filters.me, group=-50)
+async def safe_block_unblock(app, message: Message):
+    """Reliable block/unblock with reply, username/id, and temporary block timer.
+
+    Supported:
+    .block              (reply to target)
+    .block 2h           (reply + auto-unblock after 2 hours)
+    .block @username
+    .block @username 2h
+    .unblock            (reply to target)
+    .unblock @username
+    """
+    global temporary_block_tasks
+    command = (message.command[0] if getattr(message, "command", None) else "").lower()
+    parts = (message.text or "").split()
+
+    duration_text = None
+    if message.reply_to_message:
+        # Reply mode: first argument may be duration, e.g. .block 2h
+        if len(parts) >= 2 and _is_duration_token(parts[1]):
+            duration_text = parts[1]
+        user = await _resolve_self_target_user(app, message)
+    else:
+        user = await _resolve_self_target_user(app, message, 1)
+        if len(parts) >= 3 and _is_duration_token(parts[2]):
+            duration_text = parts[2]
+
+    if user is None:
+        await message.edit_text(f"❖ Usage: `.{command}` as reply or `.{command} USER_ID/@username`")
+        raise StopPropagation
+
+    target_id = user.id
+    label = _target_label(user)
+
+    try:
+        if command == "block":
+            await app.block_user(target_id)
+            seconds = _parse_duration_to_seconds(duration_text)
+            old_task = temporary_block_tasks.pop(target_id, None)
+            if old_task:
+                old_task.cancel()
+
+            if seconds:
+                async def _auto_unblock(uid, wait_seconds):
+                    try:
+                        await asyncio.sleep(wait_seconds)
+                        await app.unblock_user(uid)
+                        temporary_block_tasks.pop(uid, None)
+                        try:
+                            await app.send_message("me", f"❖ Auto-unblocked user `{uid}` after {_format_duration(wait_seconds)}")
+                        except Exception:
+                            pass
+                    except asyncio.CancelledError:
+                        pass
+                    except Exception as e:
+                        print(f"Auto unblock failed for {uid}: {e}")
+
+                temporary_block_tasks[target_id] = asyncio.create_task(_auto_unblock(target_id, seconds))
+                await message.edit_text(f"❖ {label} blocked for `{_format_duration(seconds)}`. Auto-unblock is active.")
+            else:
+                await message.edit_text(f"❖ {label} blocked.")
+        else:
+            old_task = temporary_block_tasks.pop(target_id, None)
+            if old_task:
+                old_task.cancel()
+            await app.unblock_user(target_id)
+            await message.edit_text(f"❖ {label} unblocked.")
+    except Exception as e:
+        await message.edit_text(f"❖ **ERROR**:\n`{e}`")
+    raise StopPropagation
+
+
 @app.on_message(filters.me | users & filters.text , group=336)
 def updates(app, m:Message):
  global api
