@@ -19,7 +19,7 @@ import base64
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-16-phase4-monshi2-forced-join-v4"
+FIX_VERSION = "2026-08-16-phase4-monshi2-final-fix-v4-1"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -3806,18 +3806,19 @@ one_time_keyboard=True,resize_keyboard=True)
 async def answer(client, inline_query):
      chat_id = inline_query.from_user.id
      if inline_query.query.startswith("fj2|"):
+          # Compact forced-join payload from self.py:
+          # fj2|USER_ID|c:channel1,c:channel2,g:group|p:https%3A...
+          # This branch is deliberately defensive: it should always return a
+          # result with join buttons instead of the previous error-only text.
+          payload = {"u": inline_query.from_user.id, "t": "🔐 عضویت اجباری فعال است. لطفاً عضو لینک‌های زیر شوید و سپس تأیید عضویت را بزنید.", "r": []}
+          photo_url = None
+          custom_text = None
           try:
-               # Compact forced-join payload: fj2|USER_ID|c:channel1,c:channel2,g:group
+               from urllib.parse import unquote
                parts = inline_query.query.split("|")
-               target_uid = int(parts[1]) if len(parts) > 1 and str(parts[1]).isdigit() else inline_query.from_user.id
+               if len(parts) > 1 and str(parts[1]).isdigit():
+                    payload["u"] = int(parts[1])
                compact_items = parts[2].split(",") if len(parts) > 2 and parts[2] else []
-               photo_url = None
-               if len(parts) > 3 and parts[3].startswith("p:"):
-                    try:
-                         from urllib.parse import unquote
-                         photo_url = unquote(parts[3][2:])
-                    except Exception:
-                         photo_url = None
                reqs = []
                for raw in compact_items:
                     if not raw or ":" not in raw:
@@ -3832,42 +3833,65 @@ async def answer(client, inline_query):
                          "title": ref,
                          "url": f"https://t.me/{ref}" if not ref.startswith("-") else "https://t.me/",
                     })
-               payload = {
-                    "u": target_uid,
-                    "t": "🔐 عضویت اجباری فعال است. لطفاً عضو لینک‌های زیر شوید و سپس تأیید عضویت را بزنید.",
-                    "r": reqs,
-               }
-               if photo_url:
-                    payload["p"] = photo_url
+               payload["r"] = reqs
+               for extra in parts[3:]:
+                    if extra.startswith("p:"):
+                         photo_url = unquote(extra[2:])
+                         if photo_url:
+                              payload["p"] = photo_url
+                    elif extra.startswith("t:"):
+                         custom_text = unquote(extra[2:])
+                         if custom_text:
+                              payload["t"] = custom_text
+          except Exception as exc:
+               print(f"{Fore.YELLOW}Forced Join compact parse warning: {exc}{Fore.RESET}")
+
+          try:
                keyboard = _fj_keyboard(payload)
-               if photo_url:
+               text = _fj_text(payload)
+               # Prefer photo result only when a valid public photo URL is present.
+               if photo_url and str(photo_url).startswith("http"):
                     result = InlineQueryResultPhoto(
                          title="🔐 Forced Join",
                          description="Join required channels/groups",
                          photo_url=photo_url,
                          thumb_url=photo_url,
-                         caption=_fj_text(payload),
+                         caption=text,
                          reply_markup=keyboard
                     )
                else:
                     result = InlineQueryResultArticle(
                          title="🔐 Forced Join",
                          description="Join required channels/groups",
-                         input_message_content=InputTextMessageContent(_fj_text(payload)),
+                         input_message_content=InputTextMessageContent(text),
                          reply_markup=keyboard
                     )
                await inline_query.answer(results=[result], cache_time=1, is_personal=True)
           except Exception as exc:
-               print(f"{Fore.YELLOW}Forced Join compact inline generation failed: {exc}{Fore.RESET}")
-               await inline_query.answer(
-                    results=[InlineQueryResultArticle(
-                         title="Forced Join",
-                         description="Join required channels/groups",
-                         input_message_content=InputTextMessageContent("🔐 عضویت اجباری فعال است؛ لطفاً دوباره پیام بدهید.")
-                    )],
-                    cache_time=1,
-                    is_personal=True
-               )
+               # Final fallback still includes generated buttons whenever possible.
+               print(f"{Fore.YELLOW}Forced Join compact inline answer failed: {exc}{Fore.RESET}")
+               try:
+                    await inline_query.answer(
+                         results=[InlineQueryResultArticle(
+                              title="🔐 Forced Join",
+                              description="Join required channels/groups",
+                              input_message_content=InputTextMessageContent(_fj_text(payload)),
+                              reply_markup=_fj_keyboard(payload)
+                         )],
+                         cache_time=1,
+                         is_personal=True
+                    )
+               except Exception as exc2:
+                    print(f"{Fore.YELLOW}Forced Join final fallback failed: {exc2}{Fore.RESET}")
+                    await inline_query.answer(
+                         results=[InlineQueryResultArticle(
+                              title="Forced Join",
+                              description="Join required channels/groups",
+                              input_message_content=InputTextMessageContent("🔐 عضویت اجباری فعال است. لطفاً لینک‌های عضویت را بررسی کنید.")
+                         )],
+                         cache_time=1,
+                         is_personal=True
+                    )
           return
 
      if inline_query.query.startswith("fj|"):
