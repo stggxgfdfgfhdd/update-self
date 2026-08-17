@@ -19,7 +19,7 @@ import signal
 import re
 import os
 import traceback
-FIX_VERSION = "2026-08-07-self-startup-deepfix-v8"
+FIX_VERSION = "2026-08-16-dedicated-join-helper-v4-3"
 print(f"{Fore.GREEN}Ultra Self worker fix version: {FIX_VERSION}{Fore.RESET}")
 
 # MySQL Database - Try EVERY possible Railway variable name
@@ -103,6 +103,7 @@ API_ID = int(_env("API_ID", "00000"))                           # API ID
 API_HASH = _env("API_HASH", "00000")                            # API HASH
 Channel_ID = _normalize_channel_id(_env("CHANNEL_ID", "00000"))  # Channel Username / Link / ID
 Helper_ID = _env("HELPER_ID", "00000")                          # Helper Username
+Join_Helper_ID = _env("JOIN_HELPER_ID", _env("JOIN_HELPER_USERNAME", Helper_ID))  # Dedicated Forced Join Helper Username
 
 # Card info
 CardNumber = _env("CARD_NUMBER", "00000")                       # Card Number
@@ -1056,7 +1057,7 @@ async def update(c, m):
                 self_dir = prepare_self_directory(m.chat.id)
                 error_log_path = os.path.join(self_dir, "error.log")
                 with open(error_log_path, "w") as error_log_file:
-                    process = subprocess.Popen(["python3", "-u", "-W", "ignore::SyntaxWarning", "self.py", str(m.chat.id), str(API_ID), API_HASH, Helper_ID], cwd=self_dir, stdout=error_log_file, stderr=subprocess.STDOUT)
+                    process = subprocess.Popen(["python3", "-u", "-W", "ignore::SyntaxWarning", "self.py", str(m.chat.id), str(API_ID), API_HASH, Helper_ID, Join_Helper_ID], cwd=self_dir, stdout=error_log_file, stderr=subprocess.STDOUT)
                 if await wait_for_self_ready(process, self_dir):
                     if os.path.isfile(error_log_path):
                         os.remove(error_log_path)
@@ -1153,7 +1154,7 @@ async def update(c, m):
             self_dir = prepare_self_directory(m.chat.id)
             error_log_path = os.path.join(self_dir, "error.log")
             with open(error_log_path, "w") as error_log_file:
-                process = subprocess.Popen(["python3", "-u", "-W", "ignore::SyntaxWarning", "self.py", str(m.chat.id), str(API_ID), API_HASH, Helper_ID], cwd=self_dir, stdout=error_log_file, stderr=subprocess.STDOUT)
+                process = subprocess.Popen(["python3", "-u", "-W", "ignore::SyntaxWarning", "self.py", str(m.chat.id), str(API_ID), API_HASH, Helper_ID, Join_Helper_ID], cwd=self_dir, stdout=error_log_file, stderr=subprocess.STDOUT)
             if await wait_for_self_ready(process, self_dir):
                 if os.path.isfile(error_log_path):
                     os.remove(error_log_path)
@@ -1764,7 +1765,7 @@ async def update(c, m):
                         self_dir = prepare_self_directory(user_id)
                         error_log_path = os.path.join(self_dir, "error.log")
                         with open(error_log_path, "w") as error_log_file:
-                            process = subprocess.Popen(["python3", "-u", "-W", "ignore::SyntaxWarning", "self.py", str(user_id), str(API_ID), API_HASH, Helper_ID], cwd=self_dir, stdout=error_log_file, stderr=subprocess.STDOUT)
+                            process = subprocess.Popen(["python3", "-u", "-W", "ignore::SyntaxWarning", "self.py", str(user_id), str(API_ID), API_HASH, Helper_ID, Join_Helper_ID], cwd=self_dir, stdout=error_log_file, stderr=subprocess.STDOUT)
                         if await wait_for_self_ready(process, self_dir):
                             if os.path.isfile(error_log_path):
                                 os.remove(error_log_path)
