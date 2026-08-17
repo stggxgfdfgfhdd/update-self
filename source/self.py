@@ -109,13 +109,16 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-16-phase4-monshi2-final-fix-v4-1"
+FIX_VERSION = "2026-08-16-dedicated-join-helper-v4-3"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
 api_id = int(sys.argv[2])
 api_hash = sys.argv[3]
 bot_id = sys.argv[4]
+# Dedicated bot for Monshi2 / Forced Join inline panels.
+# Falls back to the normal helper bot only if JOIN_HELPER_ID is not configured.
+join_helper_id = (sys.argv[5] if len(sys.argv) > 5 else os.environ.get("JOIN_HELPER_ID", os.environ.get("JOIN_HELPER_USERNAME", bot_id))).strip().lstrip("@")
 
 profile_photo = "self/pfp/pfp.jpg"
 # Working directory is already set to the self.py directory by subprocess.Popen cwd
@@ -370,12 +373,16 @@ async def _send_forced_join_prompt(client, message, data, missing=None):
 
     query = f"fj2|{message.chat.id}|" + ",".join(compact_parts)
 
-    # Optional custom text. Keep compact so Telegram inline query does not fail.
+    # Optional custom text. Base64 is much shorter/safer than URL-encoding Persian.
     custom_text = (data.get("forced_join_text", "") or "").strip()
     if custom_text:
-        text_query = query + "|t:" + urllib.parse.quote(custom_text[:90], safe="")
-        if len(text_query) <= 240:
-            query = text_query
+        try:
+            text_token = base64.urlsafe_b64encode(custom_text[:180].encode("utf-8")).decode("ascii").rstrip("=")
+            text_query = query + "|t:" + text_token
+            if len(text_query) <= 900:
+                query = text_query
+        except Exception as e:
+            print(f"Forced join text encode failed: {e}")
 
     # Optional configured photo. Keep query under Telegram inline query limits;
     # if too long, we still send the text panel with buttons instead of failing.
@@ -392,7 +399,7 @@ async def _send_forced_join_prompt(client, message, data, missing=None):
             print(f"Forced join photo upload failed: {e}")
 
     try:
-        results = await client.get_inline_bot_results(bot_id, query)
+        results = await client.get_inline_bot_results(join_helper_id, query)
         if results and results.results:
             await client.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
             return
