@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-16-dedicated-join-helper-clean-v4-3"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-clean-v4-8"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
