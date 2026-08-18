@@ -17,6 +17,7 @@ import re, sys, os, requests
 from datetime import date,datetime
 import jdatetime
 import urllib
+import urllib.parse
 import traceback
 import html
 from countryinfo import CountryInfo
@@ -109,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-16-dedicated-join-helper-v4-3"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-8-inline-only"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -117,8 +118,15 @@ api_id = int(sys.argv[2])
 api_hash = sys.argv[3]
 bot_id = sys.argv[4]
 # Dedicated bot for Monshi2 / Forced Join inline panels.
-# Falls back to the normal helper bot only if JOIN_HELPER_ID is not configured.
-join_helper_id = (sys.argv[5] if len(sys.argv) > 5 else os.environ.get("JOIN_HELPER_ID", os.environ.get("JOIN_HELPER_USERNAME", bot_id))).strip().lstrip("@")
+# IMPORTANT: never fall back to the normal helper/panel bot. If this is empty,
+# Monshi2 will warn the admin instead of sending a plain self message.
+join_helper_id = (sys.argv[5] if len(sys.argv) > 5 else os.environ.get("JOIN_HELPER_ID", os.environ.get("JOIN_HELPER_USERNAME", ""))).strip().lstrip("@")
+# Safety: older bot.py versions passed the normal helper bot as argv[5].
+# Do not use the panel helper for forced join; require the dedicated bot.
+if join_helper_id and bot_id and join_helper_id.lower().lstrip("@") == bot_id.lower().lstrip("@"):
+    join_helper_id = os.environ.get("JOIN_HELPER_ID", os.environ.get("JOIN_HELPER_USERNAME", "")).strip().lstrip("@")
+    if join_helper_id.lower().lstrip("@") == bot_id.lower().lstrip("@"):
+        join_helper_id = ""
 
 profile_photo = "self/pfp/pfp.jpg"
 # Working directory is already set to the self.py directory by subprocess.Popen cwd
@@ -270,6 +278,11 @@ def _monshi2_defaults(data):
     data.setdefault("forced_join_groups", [])
     data.setdefault("forced_join_text", "🔐 برای ارسال پیام، ابتدا عضو کانال‌های زیر شوید.\nبعد از عضویت روی دکمه «✅ تأیید عضویت» بزنید.")
     data.setdefault("forced_join_photo", "")
+    data.setdefault("forced_join_bot", join_helper_id or "")
+    if not data.get("forced_join_bot") and join_helper_id:
+        data["forced_join_bot"] = join_helper_id
+    if data.get("forced_join_bot"):
+        data["forced_join_bot"] = _clean_chat_ref(data.get("forced_join_bot")) if "_clean_chat_ref" in globals() else str(data.get("forced_join_bot")).strip().lstrip("@")
     if not isinstance(data.get("forced_join_channels"), list):
         data["forced_join_channels"] = []
     if not isinstance(data.get("forced_join_groups"), list):
@@ -331,16 +344,6 @@ async def _check_forced_join_membership(client, user_id, data):
     return missing
 
 
-def _forced_join_fallback_text(data, missing=None):
-    data = _monshi2_defaults(data)
-    reqs = missing if missing is not None else _monshi2_requirements(data)
-    lines = [data.get("forced_join_text") or "🔐 عضویت اجباری فعال است.", ""]
-    for item in reqs:
-        icon = "📢" if item.get("type") == "channel" else "👥"
-        lines.append(f"{icon} {item.get('title', item.get('username', 'Join'))}: {item.get('url', '')}")
-    lines.append("\n✅ بعد از عضویت دوباره پیام بدهید یا تأیید عضویت را بزنید.")
-    return "\n".join(lines)
-
 
 def _encode_fj_payload(payload):
     raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -354,59 +357,137 @@ def _decode_fj_payload(encoded):
 
 
 async def _send_forced_join_prompt(client, message, data, missing=None):
+    """Send Forced Join prompt ONLY via the dedicated Join Helper inline bot.
+
+    No plain self-message fallback is allowed here. If the Join Helper is not
+    configured or inline mode fails, the user sees no broken/simple text; the
+    admin receives a warning instead.
+    """
     data = _monshi2_defaults(data)
     reqs = missing if missing is not None else _monshi2_requirements(data)
     if not reqs:
-        return
+        return False
 
-    # Telegram inline query has a strict length limit. Use an ultra-compact
-    # query that carries only user id + requirement type + username/id.
-    # Titles are reconstructed in helper.py from the username. This guarantees
-    # the buttons are generated instead of showing the fallback error article.
-    compact_parts = []
+    def _b64_short(value, limit=28):
+        value = str(value or "").strip()
+        if not value:
+            return ""
+        try:
+            return base64.urlsafe_b64encode(value[:limit].encode("utf-8")).decode("ascii").rstrip("=")
+        except Exception:
+            return ""
+
+    plain_parts = []
+    titled_parts = []
     for item in reqs:
         kind = "c" if item.get("type") == "channel" else "g"
         ref = item.get("username") or item.get("id") or ""
         ref = _clean_chat_ref(ref) if not str(ref).startswith("-") else str(ref)
-        if ref:
-            compact_parts.append(f"{kind}:{ref}")
+        if not ref:
+            continue
+        plain = f"{kind}:{ref}"
+        plain_parts.append(plain)
+        title = (item.get("title") or ref or "").strip()
+        title_token = _b64_short(title, 24) if title and title != ref else ""
+        titled_parts.append(f"{plain}:{title_token}" if title_token else plain)
 
-    query = f"fj2|{message.chat.id}|" + ",".join(compact_parts)
+    if not plain_parts:
+        return False
 
-    # Optional custom text. Base64 is much shorter/safer than URL-encoding Persian.
-    custom_text = (data.get("forced_join_text", "") or "").strip()
-    if custom_text:
-        try:
-            text_token = base64.urlsafe_b64encode(custom_text[:180].encode("utf-8")).decode("ascii").rstrip("=")
-            text_query = query + "|t:" + text_token
-            if len(text_query) <= 900:
-                query = text_query
-        except Exception as e:
-            print(f"Forced join text encode failed: {e}")
+    max_query_len = 250  # Bot API inline query text is limited; keep it safe.
+    base_titled = f"fj2|{message.chat.id}|" + ",".join(titled_parts)
+    base_plain = f"fj2|{message.chat.id}|" + ",".join(plain_parts)
+    query = base_titled if len(base_titled) <= 150 else base_plain
+    if len(query) > max_query_len:
+        query = base_plain[:max_query_len]
 
-    # Optional configured photo. Keep query under Telegram inline query limits;
-    # if too long, we still send the text panel with buttons instead of failing.
+    # Upload optional local photo to Telegraph, then pass the public URL to the
+    # Join Helper so Telegram renders a real inline photo result with buttons.
+    photo_url = ""
     photo_path = data.get("forced_join_photo") or ""
     if photo_path and os.path.isfile(photo_path):
         try:
             uploaded = await asyncio.to_thread(upload_file, photo_path)
             if uploaded:
                 photo_url = "https://telegra.ph" + uploaded[0]
-                test_query = query + "|p:" + urllib.parse.quote(photo_url, safe="")
-                if len(test_query) <= 240:
-                    query = test_query
         except Exception as e:
             print(f"Forced join photo upload failed: {e}")
 
+    custom_text = (data.get("forced_join_text", "") or "").strip()
+
+    def _with_text_and_photo(base, text_chars):
+        q = base
+        if custom_text and text_chars > 0:
+            try:
+                text_token = base64.urlsafe_b64encode(custom_text[:text_chars].encode("utf-8")).decode("ascii").rstrip("=")
+                q = q + "|t:" + text_token
+            except Exception as e:
+                print(f"Forced join text encode failed: {e}")
+        if photo_url:
+            q = q + "|p:" + urllib.parse.quote(photo_url, safe="")
+        return q
+
+    # Prefer: buttons + configured text + configured photo. If query becomes too
+    # long, shorten only the text; never fall back to a plain self message.
+    if custom_text or photo_url:
+        chosen = None
+        for n in [180, 140, 100, 75, 55, 35, 0]:
+            candidate = _with_text_and_photo(query, n)
+            if len(candidate) <= max_query_len:
+                chosen = candidate
+                break
+        if chosen is None:
+            # Last resort: keep the inline buttons alive. Photo/text may be skipped,
+            # but the Join Helper inline panel is still used.
+            chosen = query
+            print("Forced join text/photo skipped because inline query became too long")
+        query = chosen
+
+    target_join_bot = _clean_chat_ref(data.get("forced_join_bot") or join_helper_id)
+    normal_helper = _clean_chat_ref(bot_id)
+    if target_join_bot and normal_helper and target_join_bot.lower() == normal_helper.lower():
+        print("Forced Join blocked: target bot equals normal helper bot; refusing self/plain fallback")
+        target_join_bot = ""
+
+    async def _warn_admin(reason):
+        try:
+            await client.send_message(int(admin), reason)
+        except Exception:
+            try:
+                await client.send_message("me", reason)
+            except Exception as warn_exc:
+                print(f"Forced join admin warning failed: {warn_exc} | original={reason}")
+
+    if not target_join_bot:
+        await _warn_admin(
+            "⚠️ Monshi2 خطا: Join Helper Bot تنظیم نیست یا با هلپر اصلی یکی است.\n"
+            "در اکانت سلف بزنید:\n"
+            "`.monshi2 joinbot @sefer_bottestbot`\n"
+            "و در Railway متغیر `JOIN_HELPER_ID=sefer_bottestbot` را هم تنظیم کنید."
+        )
+        return False
+
     try:
-        results = await client.get_inline_bot_results(join_helper_id, query)
+        print(f"Forced Join inline ONLY target=@{target_join_bot}: {query[:220]}...")
+        results = await client.get_inline_bot_results(target_join_bot, query)
+        count = len(getattr(results, "results", []) or [])
+        print(f"Forced Join inline result count from @{target_join_bot}: {count}")
         if results and results.results:
             await client.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
-            return
+            return True
+        await _warn_admin(
+            f"⚠️ Monshi2 خطا: ربات @{target_join_bot} به inline query نتیجه نداد.\n"
+            "Inline Mode را در BotFather روشن کنید و سرویس join-helper را Redeploy کنید."
+        )
     except Exception as e:
-        print(f"Forced join inline panel failed, using text fallback: {e}")
+        print(f"Forced Join inline failed; NO self/plain fallback will be sent: {e}")
+        await _warn_admin(
+            f"⚠️ Monshi2 خطا در ارسال پنل از @{target_join_bot}:\n`{e}`\n"
+            "هیچ متن ساده‌ای برای کاربر ارسال نشد تا خروجی خراب دیده نشود."
+        )
 
-    await client.send_message(message.chat.id, _forced_join_fallback_text(data, reqs))
+    return False
+
 tabchitimer = []
 imdb = None
 
@@ -683,7 +764,7 @@ def extract_transaction_link(input_text):
     else:
         return None
         
-@app.on_message(filters.private, group=3344)
+@app.on_message(filters.private & filters.incoming, group=3344)
 async def forward_to_channel(app, message):
     data = _monshi2_defaults(json_read("data.json"))
     if data.get("monshi2") == "on" and str(message.chat.id) != str(admin):
@@ -5776,20 +5857,77 @@ async def safe_block_unblock(app, message: Message):
 
 
 
+
+
+def _extract_tme_ref_from_text(value):
+    """Extract a Telegram username/ref from @user, t.me/user, https://t.me/user/path."""
+    value = str(value or "").strip()
+    if not value:
+        return None
+    # First direct @username
+    m = re.search(r"@([A-Za-z0-9_]{4,})", value)
+    if m:
+        return m.group(1)
+    # t.me / telegram.me links
+    m = re.search(r"(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/([^\s/?#]+)", value, re.I)
+    if m:
+        ref = m.group(1).strip().strip("/")
+        # Ignore bot deep links / joinchat plus links that cannot be checked by username
+        if ref.lower() in ["joinchat", "addstickers", "share", "c"]:
+            return None
+        return ref.lstrip("@")
+    # Plain username-ish token
+    if re.fullmatch(r"[A-Za-z0-9_]{4,}", value):
+        return value
+    return None
+
+
+async def _detect_join_item_from_ref(client, ref, title=None):
+    """Detect whether a Telegram ref is a channel or group and build join item."""
+    ref = _clean_chat_ref(ref)
+    if not ref:
+        raise ValueError("No Telegram channel/group link or username found")
+    chat_ref = ref if str(ref).startswith("-") else f"@{ref}"
+    chat = await client.get_chat(chat_ref)
+    chat_type = str(getattr(chat, "type", "")).lower()
+    if "channel" in chat_type:
+        kind = "channel"
+    elif "group" in chat_type or "supergroup" in chat_type:
+        kind = "group"
+    else:
+        raise ValueError(f"Unsupported chat type: {chat_type}")
+    final_title = title or getattr(chat, "title", None) or ref
+    username = getattr(chat, "username", None) or ref
+    return _join_item(kind, username, final_title)
+
+
+def _monshi2_reply_or_arg_text(message, parts, start_index=2):
+    if getattr(message, "reply_to_message", None):
+        reply = message.reply_to_message
+        txt = getattr(reply, "text", None) or getattr(reply, "caption", None)
+        if txt:
+            return txt
+    if len(parts) > start_index:
+        return parts[start_index]
+    return ""
 @app.on_message(filters.command(["monshi2"], ".") & filters.me, group=-50)
 async def safe_monshi2_command(app, message: Message):
     """Professional Forced Join manager for private messages.
 
     Commands:
     .monshi2 on / off
+    .monshi2 joinbot @YourJoinHelperBot
     .monshi2 addchannel @channel Title
     .monshi2 delchannel @channel
     .monshi2 addgroup @group Title
     .monshi2 delgroup @group
+    .monshi2 addlink        (reply to t.me link or pass link; auto-detect channel/group)
+    .monshi2 dellink @username
     .monshi2 list
     .monshi2 text Your custom text
-    .monshi2 photo        (reply to a photo)
+    .monshi2 photo / setphoto        (reply to a photo)
     .monshi2 delphoto
+    .monshi2 test        (send forced join prompt to yourself for preview)
     """
     try:
         data = _monshi2_defaults(json_read("data.json"))
@@ -5802,44 +5940,81 @@ async def safe_monshi2_command(app, message: Message):
             await message.edit_text(f"❖ Monshi2 Forced Join is **{action.upper()}**")
             raise StopPropagation
 
+        if action == "joinbot":
+            if len(parts) < 3:
+                await message.edit_text("❖ Usage: `.monshi2 joinbot @YourJoinHelperBot`")
+                raise StopPropagation
+            bot_ref = _clean_chat_ref(parts[2])
+            data["forced_join_bot"] = bot_ref
+            _save_monshi2_data(data)
+            await message.edit_text(f"❖ Dedicated Join Helper bot set to `@{bot_ref}`")
+            raise StopPropagation
+
         if action in ["addchannel", "addgroup"]:
             if len(parts) < 3:
                 await message.edit_text(f"❖ Usage: `.monshi2 {action} @username Title`")
                 raise StopPropagation
             kind = "channel" if action == "addchannel" else "group"
             ref = _clean_chat_ref(parts[2])
-            title = parts[3] if len(parts) >= 4 else ref
-            item = _join_item(kind, ref, title)
+            title = parts[3] if len(parts) >= 4 else None
+            # Prefer Telegram detection for accurate title/type when possible.
+            try:
+                detected = await _detect_join_item_from_ref(app, ref, title)
+                if detected["type"] != kind:
+                    await message.edit_text(f"❖ این لینک/یوزرنیم به عنوان `{detected['type']}` تشخیص داده شد. از `.monshi2 addlink` استفاده کن یا نوع درست را بزن.")
+                    raise StopPropagation
+                item = detected
+            except StopPropagation:
+                raise
+            except Exception:
+                item = _join_item(kind, ref, title or ref)
             key = "forced_join_channels" if kind == "channel" else "forced_join_groups"
-            data[key] = [x for x in data.get(key, []) if _clean_chat_ref(x.get("username")) != ref]
+            data[key] = [x for x in data.get(key, []) if _clean_chat_ref(x.get("username")) != _clean_chat_ref(item.get("username"))]
             data[key].append(item)
             _save_monshi2_data(data)
-            await message.edit_text(f"❖ Added {kind}: `{item['title']}` → @{ref}")
+            await message.edit_text(f"❖ Added {kind}: `{item['title']}` → @{item['username']}`")
             raise StopPropagation
 
-        if action in ["delchannel", "delgroup"]:
+        if action in ["addlink", "add"]:
+            source_text = _monshi2_reply_or_arg_text(message, parts, 2)
+            ref = _extract_tme_ref_from_text(source_text)
+            if not ref:
+                await message.edit_text("❖ Reply to a Telegram channel/group link or use `.monshi2 addlink https://t.me/username`")
+                raise StopPropagation
+            title = parts[3] if (not message.reply_to_message and len(parts) >= 4) else None
+            item = await _detect_join_item_from_ref(app, ref, title)
+            key = "forced_join_channels" if item["type"] == "channel" else "forced_join_groups"
+            data[key] = [x for x in data.get(key, []) if _clean_chat_ref(x.get("username")) != _clean_chat_ref(item.get("username"))]
+            data[key].append(item)
+            _save_monshi2_data(data)
+            icon = "📢" if item["type"] == "channel" else "👥"
+            await message.edit_text(f"❖ {icon} Added {item['type']}: `{item['title']}` → @{item['username']}")
+            raise StopPropagation
+
+        if action in ["delchannel", "delgroup", "dellink", "del"]:
             if len(parts) < 3:
                 await message.edit_text(f"❖ Usage: `.monshi2 {action} @username`")
                 raise StopPropagation
-            kind = "channel" if action == "delchannel" else "group"
             ref = _clean_chat_ref(parts[2])
-            key = "forced_join_channels" if kind == "channel" else "forced_join_groups"
-            before = len(data.get(key, []))
-            data[key] = [x for x in data.get(key, []) if _clean_chat_ref(x.get("username")) != ref]
+            keys = ["forced_join_channels", "forced_join_groups"] if action in ["dellink", "del"] else (["forced_join_channels"] if action == "delchannel" else ["forced_join_groups"])
+            removed = 0
+            for key in keys:
+                before = len(data.get(key, []))
+                data[key] = [x for x in data.get(key, []) if _clean_chat_ref(x.get("username")) != ref]
+                removed += before - len(data.get(key, []))
             _save_monshi2_data(data)
-            removed = before - len(data.get(key, []))
-            await message.edit_text(f"❖ Removed `{removed}` {kind}(s) for @{ref}.")
+            await message.edit_text(f"❖ Removed `{removed}` item(s) for @{ref}.")
             raise StopPropagation
 
         if action == "list":
             reqs = _monshi2_requirements(data)
-            if not reqs:
-                await message.edit_text("❖ Forced Join list is empty.")
-                raise StopPropagation
-            lines = [f"❖ **Monshi2:** `{data.get('monshi2')}`", ""]
-            for i, item in enumerate(reqs, start=1):
-                icon = "📢" if item.get("type") == "channel" else "👥"
-                lines.append(f"{i}. {icon} {item.get('title')} — @{item.get('username')}")
+            lines = [f"❖ **Monshi2:** `{data.get('monshi2')}`", f"❖ **Join Bot:** `@{data.get('forced_join_bot') or join_helper_id or 'NOT SET'}`", ""]
+            if reqs:
+                for i, item in enumerate(reqs, start=1):
+                    icon = "📢" if item.get("type") == "channel" else "👥"
+                    lines.append(f"{i}. {icon} {item.get('title')} — @{item.get('username')}")
+            else:
+                lines.append("Forced Join list is empty.")
             lines.append("\nText: " + (data.get("forced_join_text") or "—")[:400])
             lines.append("Photo: " + ("✅" if data.get("forced_join_photo") else "❌"))
             await message.edit_text("\n".join(lines))
@@ -5849,18 +6024,18 @@ async def safe_monshi2_command(app, message: Message):
             if len(parts) < 3:
                 await message.edit_text("❖ Usage: `.monshi2 text Your custom message`")
                 raise StopPropagation
-            # Everything after '.monshi2 text '
             custom_text = (message.text or "").split(maxsplit=2)[2]
             data["forced_join_text"] = custom_text
             _save_monshi2_data(data)
             await message.edit_text("❖ Forced Join text updated.")
             raise StopPropagation
 
-        if action == "photo":
+        if action in ["photo", "setphoto"]:
             if not message.reply_to_message or not getattr(message.reply_to_message, "photo", None):
-                await message.edit_text("❖ Reply to a photo with `.monshi2 photo`")
+                await message.edit_text("❖ Reply to a photo with `.monshi2 photo` or `.monshi2 setphoto`")
                 raise StopPropagation
-            path = await app.download_media(message.reply_to_message, file_name="forced_join_photo.jpg")
+            os.makedirs("forced_join", exist_ok=True)
+            path = await app.download_media(message.reply_to_message, file_name="forced_join/forced_join_photo.jpg")
             data["forced_join_photo"] = path
             _save_monshi2_data(data)
             await message.edit_text("❖ Forced Join photo updated.")
@@ -5878,17 +6053,27 @@ async def safe_monshi2_command(app, message: Message):
             await message.edit_text("❖ Forced Join photo removed.")
             raise StopPropagation
 
+        if action == "test":
+            missing = _monshi2_requirements(data)
+            if not missing:
+                await message.edit_text("❖ No forced join channels/groups configured.")
+                raise StopPropagation
+            await _send_forced_join_prompt(app, message, data, missing)
+            await message.edit_text("❖ Forced Join test sent.")
+            raise StopPropagation
+
         await message.edit_text(
             "❖ Monshi2 commands:\n"
             "`.monshi2 on` / `.monshi2 off`\n"
+            "`.monshi2 joinbot @JoinHelperBot`\n"
             "`.monshi2 addchannel @channel Title`\n"
-            "`.monshi2 delchannel @channel`\n"
             "`.monshi2 addgroup @group Title`\n"
-            "`.monshi2 delgroup @group`\n"
+            "`.monshi2 addlink` (reply to t.me link)\n"
+            "`.monshi2 delchannel @channel` / `.monshi2 delgroup @group`\n"
             "`.monshi2 list`\n"
             "`.monshi2 text Your message`\n"
-            "`.monshi2 photo` (reply photo)\n"
-            "`.monshi2 delphoto`"
+            "`.monshi2 photo` or `.monshi2 setphoto` (reply photo)\n"
+            "`.monshi2 test`"
         )
     except StopPropagation:
         raise
