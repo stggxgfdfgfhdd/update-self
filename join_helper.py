@@ -20,7 +20,7 @@ import asyncio
 import time
 from urllib.parse import unquote
 
-FIX_VERSION = "2026-08-16-dedicated-join-helper-v4-3"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-8-inline-only"
 print(f"{Fore.GREEN}TiTaN Join Helper version: {FIX_VERSION}{Fore.RESET}")
 
 
@@ -80,14 +80,23 @@ def _parse_fj2_query(query, from_user_id):
     for raw in compact_items:
         if not raw or ":" not in raw:
             continue
-        kind_code, ref = raw.split(":", 1)
-        ref = ref.strip().lstrip("@")
+        bits = raw.split(":", 2)
+        kind_code = bits[0]
+        ref = bits[1].strip().lstrip("@") if len(bits) > 1 else ""
+        title = ref
+        if len(bits) > 2 and bits[2]:
+            try:
+                decoded_title = _decode_base64_text(bits[2]).strip()
+                if decoded_title:
+                    title = decoded_title
+            except Exception as exc:
+                print(f"{Fore.YELLOW}JoinHelper title decode warning: {exc}{Fore.RESET}")
         if not ref:
             continue
         reqs.append({
             "type": "channel" if kind_code == "c" else "group",
             "username": ref,
-            "title": ref,
+            "title": title,
             "url": f"https://t.me/{ref}" if not ref.startswith("-") else "https://t.me/",
         })
     payload["r"] = reqs
@@ -163,8 +172,11 @@ async def inline_handler(client, inline_query):
         return
 
     try:
+        print(f"{Fore.CYAN}JoinHelper inline query from {inline_query.from_user.id}: {query[:220]}{Fore.RESET}")
         payload, photo_url = _parse_fj2_query(query, inline_query.from_user.id)
         keyboard = _keyboard(payload)
+        rows_count = len(getattr(keyboard, "inline_keyboard", []) or [])
+        print(f"{Fore.CYAN}JoinHelper built panel: items={len(payload.get('r', []))}, rows={rows_count}, photo={'yes' if photo_url else 'no'}{Fore.RESET}")
         text = payload.get("t") or "🔐 عضویت اجباری فعال است."
 
         # Prefer article for maximum reliability. If a valid public photo URL is provided,
