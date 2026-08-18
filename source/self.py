@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-8-inline-only"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-9-photo-text-users"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -278,6 +278,7 @@ def _monshi2_defaults(data):
     data.setdefault("forced_join_groups", [])
     data.setdefault("forced_join_text", "🔐 برای ارسال پیام، ابتدا عضو کانال‌های زیر شوید.\nبعد از عضویت روی دکمه «✅ تأیید عضویت» بزنید.")
     data.setdefault("forced_join_photo", "")
+    data.setdefault("forced_join_user_overrides", {})
     data.setdefault("forced_join_bot", join_helper_id or "")
     if not data.get("forced_join_bot") and join_helper_id:
         data["forced_join_bot"] = join_helper_id
@@ -287,7 +288,62 @@ def _monshi2_defaults(data):
         data["forced_join_channels"] = []
     if not isinstance(data.get("forced_join_groups"), list):
         data["forced_join_groups"] = []
+    if not isinstance(data.get("forced_join_user_overrides"), dict):
+        data["forced_join_user_overrides"] = {}
     return data
+
+
+def _monshi2_user_overrides(data):
+    data = _monshi2_defaults(data)
+    overrides = data.get("forced_join_user_overrides", {})
+    if not isinstance(overrides, dict):
+        overrides = {}
+        data["forced_join_user_overrides"] = overrides
+    return overrides
+
+
+def _monshi2_effective_status(data, user_id):
+    """Per-user Monshi2 state. A user override wins over global monshi2."""
+    data = _monshi2_defaults(data)
+    overrides = _monshi2_user_overrides(data)
+    key = str(user_id)
+    item = overrides.get(key)
+    if isinstance(item, dict):
+        status = str(item.get("status", "")).lower()
+    else:
+        status = str(item or "").lower()
+    if status in ["on", "off"]:
+        return status
+    return str(data.get("monshi2", "off")).lower()
+
+
+def _monshi2_set_user_override(data, user, status):
+    data = _monshi2_defaults(data)
+    overrides = _monshi2_user_overrides(data)
+    label = getattr(user, "first_name", None) or getattr(user, "username", None) or str(user.id)
+    username = getattr(user, "username", None) or ""
+    overrides[str(user.id)] = {"status": status, "label": label, "username": username}
+    data["forced_join_user_overrides"] = overrides
+    return data
+
+
+def _monshi2_del_user_override(data, user_id):
+    data = _monshi2_defaults(data)
+    overrides = _monshi2_user_overrides(data)
+    return overrides.pop(str(user_id), None) is not None
+
+
+async def _resolve_monshi2_target_user(client, message, arg_index=3):
+    user = await _resolve_self_target_user(client, message, arg_index)
+    if user is not None:
+        return user
+    try:
+        me = await client.get_me()
+        if getattr(message.chat, "type", None) and str(message.chat.type).lower().endswith("private") and message.chat.id != me.id:
+            return await client.get_users(message.chat.id)
+    except Exception:
+        pass
+    return None
 
 
 def _save_monshi2_data(data):
@@ -359,89 +415,31 @@ def _decode_fj_payload(encoded):
 async def _send_forced_join_prompt(client, message, data, missing=None):
     """Send Forced Join prompt ONLY via the dedicated Join Helper inline bot.
 
-    No plain self-message fallback is allowed here. If the Join Helper is not
-    configured or inline mode fails, the user sees no broken/simple text; the
-    admin receives a warning instead.
+    v4.9 uses fj3: full config/photo is first sent to the Join Helper bot, then
+    the inline query carries only a short token. This removes inline-query text
+    limits and makes configured photos appear with caption + buttons.
     """
     data = _monshi2_defaults(data)
     reqs = missing if missing is not None else _monshi2_requirements(data)
     if not reqs:
         return False
 
-    def _b64_short(value, limit=28):
-        value = str(value or "").strip()
-        if not value:
-            return ""
-        try:
-            return base64.urlsafe_b64encode(value[:limit].encode("utf-8")).decode("ascii").rstrip("=")
-        except Exception:
-            return ""
-
-    plain_parts = []
-    titled_parts = []
+    clean_reqs = []
     for item in reqs:
-        kind = "c" if item.get("type") == "channel" else "g"
         ref = item.get("username") or item.get("id") or ""
         ref = _clean_chat_ref(ref) if not str(ref).startswith("-") else str(ref)
         if not ref:
             continue
-        plain = f"{kind}:{ref}"
-        plain_parts.append(plain)
-        title = (item.get("title") or ref or "").strip()
-        title_token = _b64_short(title, 24) if title and title != ref else ""
-        titled_parts.append(f"{plain}:{title_token}" if title_token else plain)
+        kind = "channel" if item.get("type") == "channel" else "group"
+        clean_reqs.append({
+            "type": kind,
+            "username": ref,
+            "title": (item.get("title") or ref or kind).strip(),
+            "url": item.get("url") or _chat_url(ref),
+        })
 
-    if not plain_parts:
+    if not clean_reqs:
         return False
-
-    max_query_len = 250  # Bot API inline query text is limited; keep it safe.
-    base_titled = f"fj2|{message.chat.id}|" + ",".join(titled_parts)
-    base_plain = f"fj2|{message.chat.id}|" + ",".join(plain_parts)
-    query = base_titled if len(base_titled) <= 150 else base_plain
-    if len(query) > max_query_len:
-        query = base_plain[:max_query_len]
-
-    # Upload optional local photo to Telegraph, then pass the public URL to the
-    # Join Helper so Telegram renders a real inline photo result with buttons.
-    photo_url = ""
-    photo_path = data.get("forced_join_photo") or ""
-    if photo_path and os.path.isfile(photo_path):
-        try:
-            uploaded = await asyncio.to_thread(upload_file, photo_path)
-            if uploaded:
-                photo_url = "https://telegra.ph" + uploaded[0]
-        except Exception as e:
-            print(f"Forced join photo upload failed: {e}")
-
-    custom_text = (data.get("forced_join_text", "") or "").strip()
-
-    def _with_text_and_photo(base, text_chars):
-        q = base
-        if custom_text and text_chars > 0:
-            try:
-                text_token = base64.urlsafe_b64encode(custom_text[:text_chars].encode("utf-8")).decode("ascii").rstrip("=")
-                q = q + "|t:" + text_token
-            except Exception as e:
-                print(f"Forced join text encode failed: {e}")
-        if photo_url:
-            q = q + "|p:" + urllib.parse.quote(photo_url, safe="")
-        return q
-
-    # Prefer: buttons + configured text + configured photo. If query becomes too
-    # long, shorten only the text; never fall back to a plain self message.
-    if custom_text or photo_url:
-        chosen = None
-        for n in [180, 140, 100, 75, 55, 35, 0]:
-            candidate = _with_text_and_photo(query, n)
-            if len(candidate) <= max_query_len:
-                chosen = candidate
-                break
-        if chosen is None:
-            # Last resort: keep the inline buttons alive. Photo/text may be skipped,
-            # but the Join Helper inline panel is still used.
-            chosen = query
-            print("Forced join text/photo skipped because inline query became too long")
-        query = chosen
 
     target_join_bot = _clean_chat_ref(data.get("forced_join_bot") or join_helper_id)
     normal_helper = _clean_chat_ref(bot_id)
@@ -467,8 +465,65 @@ async def _send_forced_join_prompt(client, message, data, missing=None):
         )
         return False
 
+    custom_text = (data.get("forced_join_text", "") or "").strip()
+    if not custom_text:
+        custom_text = "🔐 برای ارسال پیام، ابتدا عضو کانال‌های زیر شوید.\nبعد از عضویت روی دکمه «✅ تأیید عضویت» بزنید."
+
+    # Telegram message limit to bot is 4096. Keep payload under it; this is still
+    # much larger than the old 180-char inline-query limit.
+    text_for_payload = custom_text[:3000]
+    token = base64.urlsafe_b64encode(os.urandom(12)).decode("ascii").rstrip("=")
+    payload = {
+        "u": int(message.chat.id),
+        "t": text_for_payload,
+        "nt": "شما هنوز کامل جوین چنل ها نشده اید",
+        "r": clean_reqs,
+        "created": int(time.time()) if "time" in globals() else 0,
+    }
+
+    encoded = _encode_fj_payload(payload)
+    # If the user sets an extremely long text/list, shrink only text to keep the
+    # config message deliverable; buttons and photo path remain intact.
+    if len(encoded) > 3500:
+        for limit in [2400, 2000, 1600, 1200, 900, 600, 300]:
+            payload["t"] = custom_text[:limit]
+            encoded = _encode_fj_payload(payload)
+            if len(encoded) <= 3500:
+                break
+
+    photo_path = data.get("forced_join_photo") or ""
+    photo_sent = False
     try:
-        print(f"Forced Join inline ONLY target=@{target_join_bot}: {query[:220]}...")
+        print(f"Forced Join config -> @{target_join_bot}: token={token}, text_len={len(payload.get('t',''))}, items={len(clean_reqs)}, photo={'yes' if photo_path else 'no'}")
+        await client.send_message(target_join_bot, f"/fjcfg {token} {encoded}")
+        if photo_path and os.path.isfile(photo_path):
+            try:
+                await client.send_photo(target_join_bot, photo_path, caption=f"/fjphoto {token}")
+                photo_sent = True
+            except Exception as photo_exc:
+                print(f"Forced join cached photo send failed: {photo_exc}")
+                # Fallback to Telegraph URL if bot-photo transfer fails.
+                try:
+                    uploaded = await asyncio.to_thread(upload_file, photo_path)
+                    if uploaded:
+                        payload["p"] = "https://telegra.ph" + uploaded[0]
+                        encoded2 = _encode_fj_payload(payload)
+                        if len(encoded2) <= 3800:
+                            await client.send_message(target_join_bot, f"/fjcfg {token} {encoded2}")
+                except Exception as tele_exc:
+                    print(f"Forced join photo upload fallback failed: {tele_exc}")
+        await asyncio.sleep(1.2 if photo_sent else 0.7)
+    except Exception as cfg_exc:
+        print(f"Forced Join config delivery failed; NO self/plain fallback will be sent: {cfg_exc}")
+        await _warn_admin(
+            f"⚠️ Monshi2 خطا: ارسال کانفیگ به @{target_join_bot} شکست خورد:\n`{cfg_exc}`\n"
+            "یک بار از اکانت سلف وارد چت ربات جوین شوید و /start بزنید، سپس دوباره تست کنید."
+        )
+        return False
+
+    query = f"fj3|{message.chat.id}|{token}"
+    try:
+        print(f"Forced Join inline ONLY target=@{target_join_bot}: {query}")
         results = await client.get_inline_bot_results(target_join_bot, query)
         count = len(getattr(results, "results", []) or [])
         print(f"Forced Join inline result count from @{target_join_bot}: {count}")
@@ -476,8 +531,8 @@ async def _send_forced_join_prompt(client, message, data, missing=None):
             await client.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
             return True
         await _warn_admin(
-            f"⚠️ Monshi2 خطا: ربات @{target_join_bot} به inline query نتیجه نداد.\n"
-            "Inline Mode را در BotFather روشن کنید و سرویس join-helper را Redeploy کنید."
+            f"⚠️ Monshi2 خطا: ربات @{target_join_bot} برای token پنل نتیجه نداد.\n"
+            "لاگ سرویس join-helper را چک کنید؛ باید پیام JoinHelper stored fj3 config و built panel دیده شود."
         )
     except Exception as e:
         print(f"Forced Join inline failed; NO self/plain fallback will be sent: {e}")
@@ -767,7 +822,7 @@ def extract_transaction_link(input_text):
 @app.on_message(filters.private & filters.incoming, group=3344)
 async def forward_to_channel(app, message):
     data = _monshi2_defaults(json_read("data.json"))
-    if data.get("monshi2") == "on" and str(message.chat.id) != str(admin):
+    if _monshi2_effective_status(data, message.chat.id) == "on" and str(message.chat.id) != str(admin):
         missing = await _check_forced_join_membership(app, message.chat.id, data)
         if missing:
             try:
@@ -5927,6 +5982,9 @@ async def safe_monshi2_command(app, message: Message):
     .monshi2 text Your custom text
     .monshi2 photo / setphoto        (reply to a photo)
     .monshi2 delphoto
+    .monshi2 user on/off @user        (per-user forced join override)
+    .monshi2 user del @user
+    .monshi2 users
     .monshi2 test        (send forced join prompt to yourself for preview)
     """
     try:
@@ -6006,9 +6064,50 @@ async def safe_monshi2_command(app, message: Message):
             await message.edit_text(f"❖ Removed `{removed}` item(s) for @{ref}.")
             raise StopPropagation
 
+        if action in ["user", "users", "userlist"]:
+            if action in ["users", "userlist"] or (len(parts) >= 2 and action == "user" and len(parts) < 3):
+                overrides = _monshi2_user_overrides(data)
+                lines = ["❖ **Monshi2 User Overrides:**"]
+                if overrides:
+                    for uid, item in overrides.items():
+                        if isinstance(item, dict):
+                            status = item.get("status", "off")
+                            label = item.get("label") or uid
+                            username = item.get("username") or ""
+                        else:
+                            status = str(item)
+                            label = uid
+                            username = ""
+                        extra = f" (@{username})" if username else ""
+                        lines.append(f"• `{uid}` — **{status.upper()}** — {label}{extra}")
+                else:
+                    lines.append("No per-user override set.")
+                lines.append("\nUsage: `.monshi2 user on/off/del @user` or reply to user")
+                await message.edit_text("\n".join(lines))
+                raise StopPropagation
+
+            sub = parts[2].lower() if len(parts) >= 3 else ""
+            if sub not in ["on", "off", "del", "delete", "clear", "remove"]:
+                await message.edit_text("❖ Usage: `.monshi2 user on/off/del @user` or reply to user")
+                raise StopPropagation
+            target = await _resolve_monshi2_target_user(app, message, 3)
+            if target is None:
+                await message.edit_text("❖ Target not found. Reply to a user or use `.monshi2 user on/off @username`.")
+                raise StopPropagation
+            if sub in ["del", "delete", "clear", "remove"]:
+                removed = _monshi2_del_user_override(data, target.id)
+                _save_monshi2_data(data)
+                await message.edit_text(f"❖ Monshi2 user override removed for {_target_label(target)}." if removed else f"❖ No override existed for {_target_label(target)}.")
+                raise StopPropagation
+            _monshi2_set_user_override(data, target, sub)
+            _save_monshi2_data(data)
+            await message.edit_text(f"❖ Monshi2 for {_target_label(target)} is now **{sub.upper()}**")
+            raise StopPropagation
+
         if action == "list":
             reqs = _monshi2_requirements(data)
-            lines = [f"❖ **Monshi2:** `{data.get('monshi2')}`", f"❖ **Join Bot:** `@{data.get('forced_join_bot') or join_helper_id or 'NOT SET'}`", ""]
+            overrides = _monshi2_user_overrides(data)
+            lines = [f"❖ **Monshi2 Global:** `{data.get('monshi2')}`", f"❖ **Join Bot:** `@{data.get('forced_join_bot') or join_helper_id or 'NOT SET'}`", f"❖ **User Overrides:** `{len(overrides)}`", ""]
             if reqs:
                 for i, item in enumerate(reqs, start=1):
                     icon = "📢" if item.get("type") == "channel" else "👥"
@@ -6017,6 +6116,7 @@ async def safe_monshi2_command(app, message: Message):
                 lines.append("Forced Join list is empty.")
             lines.append("\nText: " + (data.get("forced_join_text") or "—")[:400])
             lines.append("Photo: " + ("✅" if data.get("forced_join_photo") else "❌"))
+            lines.append("Users: use `.monshi2 users`")
             await message.edit_text("\n".join(lines))
             raise StopPropagation
 
@@ -6073,6 +6173,8 @@ async def safe_monshi2_command(app, message: Message):
             "`.monshi2 list`\n"
             "`.monshi2 text Your message`\n"
             "`.monshi2 photo` or `.monshi2 setphoto` (reply photo)\n"
+            "`.monshi2 user on/off @user` (per-user)\n"
+            "`.monshi2 users`\n"
             "`.monshi2 test`"
         )
     except StopPropagation:
