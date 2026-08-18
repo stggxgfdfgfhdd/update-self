@@ -19,7 +19,7 @@ import signal
 import re
 import os
 import traceback
-FIX_VERSION = "2026-08-16-dedicated-join-helper-v4-3"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-8-inline-only"
 print(f"{Fore.GREEN}Ultra Self worker fix version: {FIX_VERSION}{Fore.RESET}")
 
 # MySQL Database - Try EVERY possible Railway variable name
@@ -103,7 +103,7 @@ API_ID = int(_env("API_ID", "00000"))                           # API ID
 API_HASH = _env("API_HASH", "00000")                            # API HASH
 Channel_ID = _normalize_channel_id(_env("CHANNEL_ID", "00000"))  # Channel Username / Link / ID
 Helper_ID = _env("HELPER_ID", "00000")                          # Helper Username
-Join_Helper_ID = _env("JOIN_HELPER_ID", _env("JOIN_HELPER_USERNAME", Helper_ID))  # Dedicated Forced Join Helper Username
+Join_Helper_ID = _env("JOIN_HELPER_ID", _env("JOIN_HELPER_USERNAME", ""))  # Dedicated Forced Join Helper Username
 
 # Card info
 CardNumber = _env("CARD_NUMBER", "00000")                       # Card Number
