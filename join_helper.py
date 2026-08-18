@@ -6,6 +6,7 @@ from pyrogram import Client, filters, idle, errors
 from pyrogram.types import (
     InlineQueryResultArticle,
     InlineQueryResultPhoto,
+    InlineQueryResultCachedPhoto,
     InputTextMessageContent,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
@@ -20,7 +21,7 @@ import asyncio
 import time
 from urllib.parse import unquote
 
-FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-8-inline-only"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-9-photo-text-users"
 print(f"{Fore.GREEN}TiTaN Join Helper version: {FIX_VERSION}{Fore.RESET}")
 
 
@@ -49,7 +50,10 @@ def _cleanup_cache():
 
 
 def _cache_key(payload):
-    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    # Photo file_id is not needed for the verify token identity.
+    clean = dict(payload or {})
+    clean.pop("photo_file_id", None)
+    raw = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()[:18]
 
 
@@ -59,8 +63,19 @@ def _decode_base64_text(token):
     return base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8")
 
 
+def _decode_fj_payload(token):
+    return json.loads(_decode_base64_text(token))
+
+
+def _clip_text(text, limit):
+    text = str(text or "")
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)] + "…"
+
+
 def _parse_fj2_query(query, from_user_id):
-    """Parse compact query from self.py.
+    """Backward-compatible compact query parser.
 
     Format:
     fj2|USER_ID|c:channel1,c:channel2,g:group|t:BASE64_TEXT|p:PHOTO_URL
@@ -68,6 +83,7 @@ def _parse_fj2_query(query, from_user_id):
     payload = {
         "u": int(from_user_id),
         "t": "🔐 عضویت اجباری فعال است. لطفاً عضو لینک‌های زیر شوید و سپس تأیید عضویت را بزنید.",
+        "nt": "شما هنوز کامل جوین چنل ها نشده اید",
         "r": [],
     }
     photo_url = None
@@ -120,6 +136,27 @@ def _parse_fj2_query(query, from_user_id):
     return payload, photo_url
 
 
+def _parse_fj3_query(query):
+    """Parse token-based query created by v4.9 self.py.
+
+    Format: fj3|USER_ID|TOKEN
+    Full text/list/photo is already stored in _FORCED_JOIN_CACHE by /fjcfg and /fjphoto.
+    """
+    parts = str(query or "").split("|", 2)
+    if len(parts) < 3:
+        raise ValueError("invalid fj3 query")
+    user_id = int(parts[1])
+    token = parts[2].strip()
+    cached = _FORCED_JOIN_CACHE.get(token)
+    if not cached or not cached.get("payload"):
+        raise ValueError(f"fj3 config not ready for token={token}")
+    payload = dict(cached["payload"])
+    payload["u"] = user_id
+    if not payload.get("r"):
+        raise ValueError(f"fj3 config has no requirements token={token}")
+    return payload, payload.get("p")
+
+
 def _button_title(item):
     return item.get("title") or item.get("username") or "Join"
 
@@ -163,58 +200,109 @@ async def _missing_memberships(user_id, payload):
     return missing
 
 
+@app.on_message(filters.private & filters.text & filters.regex(r"^/fjcfg\s+"))
+async def store_fj_config(client, message: Message):
+    """Receive full forced-join config from the self account.
+
+    /fjcfg TOKEN BASE64_JSON
+    This avoids Telegram inline-query length limits and keeps full custom text.
+    """
+    try:
+        parts = (message.text or "").split(maxsplit=2)
+        if len(parts) < 3:
+            return
+        token = parts[1].strip()
+        payload = _decode_fj_payload(parts[2].strip())
+        existing = _FORCED_JOIN_CACHE.get(token, {}).get("payload") or {}
+        if existing.get("photo_file_id") and not payload.get("photo_file_id"):
+            payload["photo_file_id"] = existing.get("photo_file_id")
+        _FORCED_JOIN_CACHE[token] = {"payload": payload, "time": int(time.time())}
+        print(f"{Fore.GREEN}JoinHelper stored fj3 config: token={token}, items={len(payload.get('r', []))}, text_len={len(payload.get('t', ''))}{Fore.RESET}")
+    except Exception as exc:
+        print(f"{Fore.RED}JoinHelper /fjcfg store failed: {exc}{Fore.RESET}")
+
+
+@app.on_message(filters.private & filters.photo)
+async def store_fj_photo(client, message: Message):
+    """Receive configured forced-join photo from self account.
+
+    Caption: /fjphoto TOKEN
+    The bot stores its own photo file_id and later uses InlineQueryResultCachedPhoto.
+    """
+    caption = (message.caption or "").strip()
+    if not caption.startswith("/fjphoto"):
+        return
+    try:
+        parts = caption.split(maxsplit=1)
+        if len(parts) < 2:
+            return
+        token = parts[1].strip()
+        file_id = message.photo.file_id
+        cached = _FORCED_JOIN_CACHE.get(token) or {"payload": {}, "time": int(time.time())}
+        payload = cached.get("payload") or {}
+        payload["photo_file_id"] = file_id
+        _FORCED_JOIN_CACHE[token] = {"payload": payload, "time": int(time.time())}
+        print(f"{Fore.GREEN}JoinHelper stored fj3 photo: token={token}, file_id={file_id[:24]}...{Fore.RESET}")
+    except Exception as exc:
+        print(f"{Fore.RED}JoinHelper /fjphoto store failed: {exc}{Fore.RESET}")
+
+
 @app.on_inline_query()
 async def inline_handler(client, inline_query):
     query = inline_query.query or ""
-    if not query.startswith("fj2|"):
+    if not (query.startswith("fj2|") or query.startswith("fj3|")):
         # This dedicated bot should not answer unrelated inline queries.
         await inline_query.answer(results=[], cache_time=1, is_personal=True)
         return
 
     try:
         print(f"{Fore.CYAN}JoinHelper inline query from {inline_query.from_user.id}: {query[:220]}{Fore.RESET}")
-        payload, photo_url = _parse_fj2_query(query, inline_query.from_user.id)
+        if query.startswith("fj3|"):
+            payload, photo_url = _parse_fj3_query(query)
+        else:
+            payload, photo_url = _parse_fj2_query(query, inline_query.from_user.id)
+
         keyboard = _keyboard(payload)
         rows_count = len(getattr(keyboard, "inline_keyboard", []) or [])
-        print(f"{Fore.CYAN}JoinHelper built panel: items={len(payload.get('r', []))}, rows={rows_count}, photo={'yes' if photo_url else 'no'}{Fore.RESET}")
+        photo_file_id = payload.get("photo_file_id")
+        print(f"{Fore.CYAN}JoinHelper built panel: items={len(payload.get('r', []))}, rows={rows_count}, photo={'cached' if photo_file_id else ('url' if photo_url else 'no')}, text_len={len(payload.get('t', ''))}{Fore.RESET}")
         text = payload.get("t") or "🔐 عضویت اجباری فعال است."
 
-        # Prefer article for maximum reliability. If a valid public photo URL is provided,
-        # use photo result; if it fails, fall back to article with the same buttons.
+        if photo_file_id:
+            result = InlineQueryResultCachedPhoto(
+                photo_file_id=photo_file_id,
+                title="🔐 Forced Join",
+                description="Join required channels/groups",
+                caption=_clip_text(text, 1024),
+                reply_markup=keyboard,
+            )
+            await inline_query.answer(results=[result], cache_time=1, is_personal=True)
+            return
+
         if photo_url:
-            try:
-                result = InlineQueryResultPhoto(
-                    title="🔐 Forced Join",
-                    description="Join required channels/groups",
-                    photo_url=photo_url,
-                    thumb_url=photo_url,
-                    caption=text,
-                    reply_markup=keyboard,
-                )
-                await inline_query.answer(results=[result], cache_time=1, is_personal=True)
-                return
-            except Exception as exc:
-                print(f"{Fore.YELLOW}JoinHelper photo result failed, using article: {exc}{Fore.RESET}")
+            result = InlineQueryResultPhoto(
+                title="🔐 Forced Join",
+                description="Join required channels/groups",
+                photo_url=photo_url,
+                thumb_url=photo_url,
+                caption=_clip_text(text, 1024),
+                reply_markup=keyboard,
+            )
+            await inline_query.answer(results=[result], cache_time=1, is_personal=True)
+            return
 
         result = InlineQueryResultArticle(
             title="🔐 Forced Join",
             description="Join required channels/groups",
-            input_message_content=InputTextMessageContent(text),
+            input_message_content=InputTextMessageContent(_clip_text(text, 4096)),
             reply_markup=keyboard,
         )
         await inline_query.answer(results=[result], cache_time=1, is_personal=True)
     except Exception as exc:
-        print(f"{Fore.RED}JoinHelper inline build failed: {exc}{Fore.RESET}")
-        # Final emergency response; should rarely happen.
-        await inline_query.answer(
-            results=[InlineQueryResultArticle(
-                title="🔐 Forced Join",
-                description="Try again",
-                input_message_content=InputTextMessageContent("🔐 عضویت اجباری فعال است؛ لطفاً دوباره پیام بدهید."),
-            )],
-            cache_time=1,
-            is_personal=True,
-        )
+        # Do not return a no-button fallback article. The self account will see no
+        # results and warn admin instead, preventing broken plain prompts.
+        print(f"{Fore.RED}JoinHelper inline build failed; returning no results: {exc}{Fore.RESET}")
+        await inline_query.answer(results=[], cache_time=1, is_personal=True)
 
 
 @app.on_callback_query(filters.regex(r"^fjv-"))
@@ -233,21 +321,30 @@ async def verify_callback(client, call):
 
     missing = await _missing_memberships(call.from_user.id, payload)
     if missing:
-        names = "\n".join([f"• {_button_title(x)}" for x in missing])
-        text = f"❌ عضویت کامل نیست\n\nموارد باقی‌مانده:\n{names}"
+        text = payload.get("nt") or "شما هنوز کامل جوین چنل ها نشده اید"
         await call.answer("❌ عضویت کامل نیست", show_alert=True)
+        reply_markup = _keyboard(payload)  # Keep all buttons visible.
     else:
         text = "✅ عضویت تأیید شد\n🔓 دسترسی شما فعال شد. اکنون می‌توانید پیام ارسال کنید."
         await call.answer("✅ عضویت تأیید شد", show_alert=True)
+        reply_markup = None
 
     try:
         if getattr(call, "inline_message_id", None):
             try:
-                await client.edit_inline_caption(inline_message_id=call.inline_message_id, caption=text, reply_markup=None)
+                await client.edit_inline_caption(
+                    inline_message_id=call.inline_message_id,
+                    caption=_clip_text(text, 1024),
+                    reply_markup=reply_markup,
+                )
             except Exception:
-                await client.edit_inline_text(inline_message_id=call.inline_message_id, text=text, reply_markup=None)
+                await client.edit_inline_text(
+                    inline_message_id=call.inline_message_id,
+                    text=_clip_text(text, 4096),
+                    reply_markup=reply_markup,
+                )
         elif getattr(call, "message", None):
-            await client.edit_message_text(call.message.chat.id, call.message.id, text, reply_markup=None)
+            await client.edit_message_text(call.message.chat.id, call.message.id, _clip_text(text, 4096), reply_markup=reply_markup)
     except Exception as exc:
         print(f"{Fore.YELLOW}JoinHelper verify edit failed: {exc}{Fore.RESET}")
 
