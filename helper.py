@@ -3,7 +3,7 @@
 # Developer: @IVGalaxy
 # © 2024 Ultra Self LLC. All rights reserved.
 #================== Import ==================#
-from pyrogram import Client, filters, idle, errors, StopPropagation
+from pyrogram import Client, filters, idle, errors, StopPropagation, enums
 from pyrogram.types import *
 from pyrogram.raw import functions, base, types
 from colorama import Fore
@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-18-dedicated-join-helper-clean-v4-9"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-clean-v5-1-panel-pagination-fix"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -3257,6 +3257,7 @@ def build_titan_panel_keyboard(user_id, language="fa"):
                     InlineKeyboardButton('𝗣𝗵𝗼𝘁𝗼', callback_data=f'photo2-{suffix}'),
                     InlineKeyboardButton('𝗠𝘂𝘀𝗶𝗰', callback_data=f'music2-{suffix}')
                ],
+               [InlineKeyboardButton('𝗠𝗼𝗻𝘀𝗵𝗶𝟮 𝗣𝗿𝗼', callback_data=f'monshi2_panel2-{suffix}')],
                [InlineKeyboardButton('𝗦𝘆𝘀𝘁𝗲𝗺', callback_data=f'system2-{suffix}')],
                [InlineKeyboardButton('● 𝗖𝗹𝗼𝘀𝗲 𝗣𝗮𝗻𝗲𝗹 ●', callback_data=f'close2-{suffix}')],
           ]
@@ -3303,6 +3304,7 @@ def build_titan_panel_keyboard(user_id, language="fa"):
                     InlineKeyboardButton('عکس', callback_data=f'photo1-{suffix}'),
                     InlineKeyboardButton('موزیک', callback_data=f'music1-{suffix}')
                ],
+               [InlineKeyboardButton('مدیریت Monshi2 Pro', callback_data=f'monshi2_panel1-{suffix}')],
                [InlineKeyboardButton('تنظیمات سیستم', callback_data=f'system1-{suffix}')],
                [InlineKeyboardButton('● بستن پنل ●', callback_data=f'close1-{suffix}')],
           ]
@@ -3372,7 +3374,7 @@ _TITAN_HELP_ACTIONS = {
 }
 
 
-def _titan_split_long_line(line, max_len=560):
+def _titan_split_long_line(line, max_len=420):
      line = str(line)
      if len(line) <= max_len:
           return [line]
@@ -3388,10 +3390,10 @@ def _titan_split_long_line(line, max_len=560):
      return parts
 
 
-def _titan_paginate_help_text(raw_text, title, lang="fa", body_limit=690):
+def _titan_paginate_help_text(raw_text, title, lang="fa", body_limit=520):
      lines = []
      for line in str(raw_text or "").strip().splitlines():
-          for part in _titan_split_long_line(line.rstrip(), 560):
+          for part in _titan_split_long_line(line.rstrip(), 420):
                lines.append(part)
      chunks, current, current_len = [], [], 0
      for line in lines:
@@ -3458,12 +3460,97 @@ def _titan_paginated_keyboard(lang, key, page, total, user_id):
      return InlineKeyboardMarkup(rows)
 
 
+async def _titan_plain_edit_kwargs():
+     """Disable parsing for help pages so broken Markdown in old help text never hides commands."""
+     try:
+          return {"parse_mode": enums.ParseMode.DISABLED}
+     except Exception:
+          return {"parse_mode": None}
+
+
+async def _titan_show_paginated_text(client, call, text, reply_markup=None):
+     """Robust renderer for paginated help pages.
+
+     Important: never show the old 'caption limit' fallback. Each page is already
+     short enough, so if caption edit fails we try text edit/send using parse_mode
+     disabled. This keeps commands visible instead of replacing them with an error.
+     """
+     full_text = str(text or "")
+     # Final absolute safety for Telegram caption limit.
+     if len(full_text) > 900:
+          full_text = full_text[:870].rstrip() + "\n…"
+     plain_kwargs = await _titan_plain_edit_kwargs()
+
+     if getattr(call, "inline_message_id", None):
+          # Inline result may be photo or article. Try both edit APIs.
+          try:
+               return await client.edit_inline_caption(
+                    inline_message_id=call.inline_message_id,
+                    caption=full_text,
+                    reply_markup=reply_markup,
+                    **plain_kwargs,
+               )
+          except Exception as cap_exc:
+               try:
+                    return await client.edit_inline_text(
+                         inline_message_id=call.inline_message_id,
+                         text=full_text,
+                         reply_markup=reply_markup,
+                         **plain_kwargs,
+                    )
+               except Exception as txt_exc:
+                    print(f"{Fore.YELLOW}TITAN paginated inline edit failed: caption={cap_exc} text={txt_exc}{Fore.RESET}")
+                    try:
+                         await call.answer("برای نمایش کامل، پنل را داخل پیوی Helper باز کن.", show_alert=True)
+                    except Exception:
+                         pass
+                    return
+
+     if getattr(call, "message", None):
+          if getattr(call.message, "photo", None):
+               try:
+                    return await client.edit_message_caption(
+                         call.message.chat.id,
+                         call.message.id,
+                         caption=full_text,
+                         reply_markup=reply_markup,
+                         **plain_kwargs,
+                    )
+               except Exception as cap_exc:
+                    print(f"{Fore.YELLOW}TITAN paginated caption edit failed, switching to text: {cap_exc}{Fore.RESET}")
+                    try:
+                         await call.message.delete()
+                    except Exception:
+                         pass
+                    return await client.send_message(
+                         call.message.chat.id,
+                         full_text,
+                         reply_markup=reply_markup,
+                         **plain_kwargs,
+                    )
+          try:
+               return await client.edit_message_text(
+                    call.message.chat.id,
+                    call.message.id,
+                    text=full_text,
+                    reply_markup=reply_markup,
+                    **plain_kwargs,
+               )
+          except Exception:
+               return await client.send_message(
+                    call.message.chat.id,
+                    full_text,
+                    reply_markup=reply_markup,
+                    **plain_kwargs,
+               )
+
+
 async def _titan_show_help_page(client, call, lang, key, page, user_id):
      sections = _titan_help_sections()
      title, raw_text = sections[key][lang]
      pages = _titan_paginate_help_text(raw_text, title, lang=lang)
      page = max(0, min(int(page), len(pages) - 1))
-     await _titan_edit_inline_or_chat(
+     await _titan_show_paginated_text(
           client,
           call,
           text=pages[page],
@@ -3524,8 +3611,8 @@ async def _titan_edit_inline_or_chat(client, call, text, reply_markup=None):
                     reply_markup=reply_markup
                )
           except Exception:
-               # Last safe fallback: do not summarize silently; show clear reason.
-               fallback = "**این بخش طولانی‌تر از محدودیت کپشن تلگرام است. پنل را داخل پیوی Helper باز کن تا متن کامل نمایش داده شود.**"
+               # Last safe fallback: show the beginning of the real content, never a fake error.
+               fallback = full_text[:900].rstrip() + ("\n…" if len(full_text) > 900 else "")
                try:
                     return await client.edit_inline_caption(
                          inline_message_id=call.inline_message_id,
@@ -3566,6 +3653,51 @@ async def _titan_edit_inline_or_chat(client, call, text, reply_markup=None):
                reply_markup=reply_markup
           )
 
+
+
+
+def _monshi2_helper_panel_text(lang="fa", section="main"):
+     if lang == "en":
+          texts = {
+               "main": """**Monshi2 Pro Management**\n\nThis helper panel shows ready-to-copy commands. Actual Monshi2 settings are stored inside the running self account, so run these commands in your self account chat/Saved Messages.\n\nChoose a section below:""",
+               "config": """**Monshi2 Core Settings**\n\n` .monshi2 on `\n` .monshi2 off `\n` .monshi2 joinbot @sefer_bottestbot `\n` .monshi2 cooldown 60 `\n` .monshi2 deletesuccess on `\n` .monshi2 list `\n` .monshi2 test `""",
+               "links": """**Channels / Groups**\n\n` .monshi2 addchannel @channel Title `\n` .monshi2 delchannel @channel `\n` .monshi2 addgroup @group Title `\n` .monshi2 delgroup @group `\n` .monshi2 addlink https://t.me/username `\n` .monshi2 dellink @username `""",
+               "text": """**Text / Photo**\n\n` .monshi2 text Your custom forced join text `\n` .monshi2 notjoinedtext You have not joined all channels yet `\n` .monshi2 successtext Membership verified `\n\nReply to a photo:\n` .monshi2 setphoto `\n` .monshi2 delphoto `""",
+               "users": """**Per-user Leveling**\n\n` .monshi2 user on @user `\n` .monshi2 user off @user `\n` .monshi2 user del @user `\n` .monshi2 users `\n\nWorks by reply too.""",
+               "stats": """**Stats**\n\n` .monshi2 stats `\n` .monshi2 clearstats `\n\nStats include blocked PV messages, panels sent, cooldown skipped, verify success/failed, and deleted panels.""",
+          }
+     else:
+          texts = {
+               "main": """**پنل مدیریت Monshi2 Pro**\n\nاین پنل، دستورهای آماده‌ی مدیریت را نشان می‌دهد. تنظیمات واقعی Monshi2 داخل خود self ذخیره می‌شود؛ پس دستورها را داخل اکانت سلف/Saved Messages اجرا کن.\n\nیک بخش را انتخاب کن:""",
+               "config": """**تنظیمات اصلی Monshi2**\n\n` .monshi2 on `\n` .monshi2 off `\n` .monshi2 joinbot @sefer_bottestbot `\n` .monshi2 cooldown 60 `\n` .monshi2 deletesuccess on `\n` .monshi2 list `\n` .monshi2 test `""",
+               "links": """**کانال‌ها و گروه‌ها**\n\n` .monshi2 addchannel @channel Title `\n` .monshi2 delchannel @channel `\n` .monshi2 addgroup @group Title `\n` .monshi2 delgroup @group `\n` .monshi2 addlink https://t.me/username `\n` .monshi2 dellink @username `""",
+               "text": """**متن و عکس**\n\n` .monshi2 text متن دلخواه جوین اجباری `\n` .monshi2 notjoinedtext شما هنوز کامل جوین چنل ها نشده اید `\n` .monshi2 successtext عضویت شما تأیید شد `\n\nروی عکس ریپلای کن:\n` .monshi2 setphoto `\n` .monshi2 delphoto `""",
+               "users": """**سطح‌بندی کاربران**\n\n` .monshi2 user on @user `\n` .monshi2 user off @user `\n` .monshi2 user del @user `\n` .monshi2 users `\n\nبا ریپلای هم کار می‌کند.""",
+               "stats": """**آمار جوین اجباری**\n\n` .monshi2 stats `\n` .monshi2 clearstats `\n\nآمار شامل پیام‌های حذف‌شده پیوی، پنل‌های ارسال‌شده، ضداسپم، تأیید موفق/ناموفق و پنل‌های حذف‌شده است.""",
+          }
+     return texts.get(section, texts["main"])
+
+
+def _monshi2_helper_panel_keyboard(user_id, lang="fa", section="main"):
+     suffix = str(user_id)
+     if section == "main":
+          if lang == "en":
+               rows = [
+                    [InlineKeyboardButton("Core Settings", callback_data=f"monshi2_config2-{suffix}"), InlineKeyboardButton("Links", callback_data=f"monshi2_links2-{suffix}")],
+                    [InlineKeyboardButton("Text / Photo", callback_data=f"monshi2_text2-{suffix}"), InlineKeyboardButton("Users", callback_data=f"monshi2_users2-{suffix}")],
+                    [InlineKeyboardButton("Stats", callback_data=f"monshi2_stats2-{suffix}")],
+                    [InlineKeyboardButton("🔙 Back", callback_data=f"back2-{suffix}"), InlineKeyboardButton("✖ Close", callback_data=f"close2-{suffix}")],
+               ]
+          else:
+               rows = [
+                    [InlineKeyboardButton("تنظیمات اصلی", callback_data=f"monshi2_config1-{suffix}"), InlineKeyboardButton("لینک‌ها", callback_data=f"monshi2_links1-{suffix}")],
+                    [InlineKeyboardButton("متن / عکس", callback_data=f"monshi2_text1-{suffix}"), InlineKeyboardButton("کاربران", callback_data=f"monshi2_users1-{suffix}")],
+                    [InlineKeyboardButton("آمار", callback_data=f"monshi2_stats1-{suffix}")],
+                    [InlineKeyboardButton("🔙 بازگشت", callback_data=f"back1-{suffix}"), InlineKeyboardButton("✖ بستن", callback_data=f"close1-{suffix}")],
+               ]
+     else:
+          rows = [[InlineKeyboardButton("🔙 Monshi2", callback_data=f"monshi2_panel{2 if lang == 'en' else 1}-{suffix}")]]
+     return InlineKeyboardMarkup(rows)
 
 async def _titan_close_panel(client, call, fallback_text="**● پنل راهنما بسته شد ●**"):
      """Close panel. Normal photo messages are deleted with their card.
@@ -3932,6 +4064,9 @@ async def call(app, call):
                     InlineKeyboardButton('موزیک',callback_data=f'music1-{call.from_user.id}')
                ],
                [
+                    InlineKeyboardButton('مدیریت Monshi2 Pro',callback_data=f'monshi2_panel1-{call.from_user.id}')
+               ],
+               [
                     InlineKeyboardButton('تنظیمات سیستم',callback_data=f'system1-{call.from_user.id}')
                ],
                [
@@ -3986,6 +4121,9 @@ async def call(app, call):
                [
                     InlineKeyboardButton('𝗣𝗵𝗼𝘁𝗼',callback_data=f'photo2-{call.from_user.id}'),
                     InlineKeyboardButton('𝗠𝘂𝘀𝗶𝗰',callback_data=f'music2-{call.from_user.id}')
+               ],
+               [
+                    InlineKeyboardButton('𝗠𝗼𝗻𝘀𝗵𝗶𝟮 𝗣𝗿𝗼',callback_data=f'monshi2_panel2-{call.from_user.id}')
                ],
                [
                     InlineKeyboardButton('𝗦𝘆𝘀𝘁𝗲𝗺',callback_data=f'system2-{call.from_user.id}')
@@ -4052,7 +4190,23 @@ async def call(app, call):
                          await _titan_show_help_page(app, call, _parts[1], _parts[2], int(_parts[3]), call.from_user.id)
                          return
      
-               if call.data.split("-")[0] == "persian":
+               if _action.startswith("monshi2_"):
+                    lang = "en" if _action.endswith("2") else "fa"
+                    base = _action[:-1] if _action[-1:] in ["1", "2"] else _action
+                    section = "main"
+                    if base == "monshi2_config":
+                         section = "config"
+                    elif base == "monshi2_links":
+                         section = "links"
+                    elif base == "monshi2_text":
+                         section = "text"
+                    elif base == "monshi2_users":
+                         section = "users"
+                    elif base == "monshi2_stats":
+                         section = "stats"
+                    await _titan_edit_inline_or_chat(app, call, text=_monshi2_helper_panel_text(lang, section), reply_markup=_monshi2_helper_panel_keyboard(call.from_user.id, lang, section))
+
+               elif call.data.split("-")[0] == "persian":
                     await _titan_edit_inline_or_chat(app, call, text=f"**سلام {call.from_user.first_name} به راهنمای اولترا سلف خوش آمدید. لطفا بخش مورد نظر خود را انتخاب کنید:**", reply_markup=mark1)
 
                elif call.data.split("-")[0] == "english":
