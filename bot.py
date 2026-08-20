@@ -19,7 +19,7 @@ import signal
 import re
 import os
 import traceback
-FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-9-photo-text-users"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v5-0-monshi2-pro"
 print(f"{Fore.GREEN}Ultra Self worker fix version: {FIX_VERSION}{Fore.RESET}")
 
 # MySQL Database - Try EVERY possible Railway variable name
