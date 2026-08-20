@@ -21,7 +21,7 @@ import asyncio
 import time
 from urllib.parse import unquote
 
-FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-9-photo-text-users"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v5-0-monshi2-pro"
 print(f"{Fore.GREEN}TiTaN Join Helper version: {FIX_VERSION}{Fore.RESET}")
 
 
@@ -152,6 +152,7 @@ def _parse_fj3_query(query):
         raise ValueError(f"fj3 config not ready for token={token}")
     payload = dict(cached["payload"])
     payload["u"] = user_id
+    payload["_token"] = token
     if not payload.get("r"):
         raise ValueError(f"fj3 config has no requirements token={token}")
     return payload, payload.get("p")
@@ -163,7 +164,8 @@ def _button_title(item):
 
 def _keyboard(payload):
     _cleanup_cache()
-    token = _cache_key(payload)
+    token = str((payload or {}).get("_token") or _cache_key(payload))
+    payload["_token"] = token
     _FORCED_JOIN_CACHE[token] = {"payload": payload, "time": int(time.time())}
 
     rows = []
@@ -213,9 +215,11 @@ async def store_fj_config(client, message: Message):
             return
         token = parts[1].strip()
         payload = _decode_fj_payload(parts[2].strip())
+        payload["_token"] = token
         existing = _FORCED_JOIN_CACHE.get(token, {}).get("payload") or {}
-        if existing.get("photo_file_id") and not payload.get("photo_file_id"):
-            payload["photo_file_id"] = existing.get("photo_file_id")
+        for keep_key in ["photo_file_id", "source_chat_id", "source_message_id"]:
+            if existing.get(keep_key) and not payload.get(keep_key):
+                payload[keep_key] = existing.get(keep_key)
         _FORCED_JOIN_CACHE[token] = {"payload": payload, "time": int(time.time())}
         print(f"{Fore.GREEN}JoinHelper stored fj3 config: token={token}, items={len(payload.get('r', []))}, text_len={len(payload.get('t', ''))}{Fore.RESET}")
     except Exception as exc:
@@ -245,6 +249,42 @@ async def store_fj_photo(client, message: Message):
         print(f"{Fore.GREEN}JoinHelper stored fj3 photo: token={token}, file_id={file_id[:24]}...{Fore.RESET}")
     except Exception as exc:
         print(f"{Fore.RED}JoinHelper /fjphoto store failed: {exc}{Fore.RESET}")
+
+
+@app.on_message(filters.private & filters.text & filters.regex(r"^/fjmsg\s+"))
+async def store_fj_message(client, message: Message):
+    """Receive final panel message id from self so success verify can delete it.
+
+    /fjmsg TOKEN CHAT_ID MESSAGE_ID
+    """
+    try:
+        parts = (message.text or "").split(maxsplit=3)
+        if len(parts) < 4:
+            return
+        token = parts[1].strip()
+        chat_id = int(parts[2])
+        msg_id = int(parts[3])
+        cached = _FORCED_JOIN_CACHE.get(token) or {"payload": {}, "time": int(time.time())}
+        payload = cached.get("payload") or {}
+        payload["_token"] = token
+        payload["source_chat_id"] = chat_id
+        payload["source_message_id"] = msg_id
+        _FORCED_JOIN_CACHE[token] = {"payload": payload, "time": int(time.time())}
+        print(f"{Fore.GREEN}JoinHelper stored fj3 panel message: token={token}, chat={chat_id}, msg={msg_id}{Fore.RESET}")
+    except Exception as exc:
+        print(f"{Fore.RED}JoinHelper /fjmsg store failed: {exc}{Fore.RESET}")
+
+
+async def _notify_owner(payload, text):
+    owner = payload.get("owner") or payload.get("owner_id")
+    if not owner:
+        return False
+    try:
+        await app.send_message(int(owner), text)
+        return True
+    except Exception as exc:
+        print(f"{Fore.YELLOW}JoinHelper notify owner failed: {exc}{Fore.RESET}")
+        return False
 
 
 @app.on_inline_query()
@@ -314,6 +354,7 @@ async def verify_callback(client, call):
         return
 
     payload = cached["payload"]
+    payload["_token"] = token
     target_uid = payload.get("u")
     if target_uid and int(target_uid) != int(call.from_user.id):
         await call.answer("❌ این دکمه برای شما نیست.", show_alert=True)
@@ -323,30 +364,66 @@ async def verify_callback(client, call):
     if missing:
         text = payload.get("nt") or "شما هنوز کامل جوین چنل ها نشده اید"
         await call.answer("❌ عضویت کامل نیست", show_alert=True)
+        await _notify_owner(payload, f"/fjstat fail {call.from_user.id} {token}")
         reply_markup = _keyboard(payload)  # Keep all buttons visible.
-    else:
-        text = "✅ عضویت تأیید شد\n🔓 دسترسی شما فعال شد. اکنون می‌توانید پیام ارسال کنید."
-        await call.answer("✅ عضویت تأیید شد", show_alert=True)
-        reply_markup = None
+        try:
+            if getattr(call, "inline_message_id", None):
+                try:
+                    await client.edit_inline_caption(
+                        inline_message_id=call.inline_message_id,
+                        caption=_clip_text(text, 1024),
+                        reply_markup=reply_markup,
+                    )
+                except Exception:
+                    await client.edit_inline_text(
+                        inline_message_id=call.inline_message_id,
+                        text=_clip_text(text, 4096),
+                        reply_markup=reply_markup,
+                    )
+            elif getattr(call, "message", None):
+                try:
+                    await client.edit_message_caption(call.message.chat.id, call.message.id, caption=_clip_text(text, 1024), reply_markup=reply_markup)
+                except Exception:
+                    await client.edit_message_text(call.message.chat.id, call.message.id, _clip_text(text, 4096), reply_markup=reply_markup)
+        except Exception as exc:
+            print(f"{Fore.YELLOW}JoinHelper failed verify edit failed: {exc}{Fore.RESET}")
+        return
 
+    # Success
+    success_text = payload.get("st") or "✅ عضویت شما تأیید شد"
+    await call.answer("✅ عضویت تأیید شد", show_alert=True)
+    await _notify_owner(payload, f"/fjstat success {call.from_user.id} {token}")
+
+    delete_success = str(payload.get("delete_success", "on")).lower() == "on"
+    chat_id = payload.get("source_chat_id")
+    msg_id = payload.get("source_message_id")
+    if delete_success and chat_id and msg_id:
+        # Ask the userbot/self account to delete its own inline-result message.
+        await _notify_owner(payload, f"/fjdelete {chat_id} {msg_id} {token}")
+        return
+
+    # Fallback if deletion is disabled or message id was not registered.
     try:
         if getattr(call, "inline_message_id", None):
             try:
                 await client.edit_inline_caption(
                     inline_message_id=call.inline_message_id,
-                    caption=_clip_text(text, 1024),
-                    reply_markup=reply_markup,
+                    caption=_clip_text(success_text, 1024),
+                    reply_markup=None,
                 )
             except Exception:
                 await client.edit_inline_text(
                     inline_message_id=call.inline_message_id,
-                    text=_clip_text(text, 4096),
-                    reply_markup=reply_markup,
+                    text=_clip_text(success_text, 4096),
+                    reply_markup=None,
                 )
         elif getattr(call, "message", None):
-            await client.edit_message_text(call.message.chat.id, call.message.id, _clip_text(text, 4096), reply_markup=reply_markup)
+            try:
+                await client.edit_message_caption(call.message.chat.id, call.message.id, caption=_clip_text(success_text, 1024), reply_markup=None)
+            except Exception:
+                await client.edit_message_text(call.message.chat.id, call.message.id, _clip_text(success_text, 4096), reply_markup=None)
     except Exception as exc:
-        print(f"{Fore.YELLOW}JoinHelper verify edit failed: {exc}{Fore.RESET}")
+        print(f"{Fore.YELLOW}JoinHelper success edit failed: {exc}{Fore.RESET}")
 
 
 @app.on_message(filters.private & filters.command("start"))
