@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v4-9-photo-text-users"
+FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v5-0-monshi2-pro"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -279,6 +279,12 @@ def _monshi2_defaults(data):
     data.setdefault("forced_join_text", "🔐 برای ارسال پیام، ابتدا عضو کانال‌های زیر شوید.\nبعد از عضویت روی دکمه «✅ تأیید عضویت» بزنید.")
     data.setdefault("forced_join_photo", "")
     data.setdefault("forced_join_user_overrides", {})
+    data.setdefault("forced_join_cooldown", 60)
+    data.setdefault("forced_join_last_sent", {})
+    data.setdefault("forced_join_stats", {})
+    data.setdefault("forced_join_notjoined_text", "شما هنوز کامل جوین چنل ها نشده اید")
+    data.setdefault("forced_join_success_text", "✅ عضویت شما تأیید شد")
+    data.setdefault("forced_join_delete_on_success", "on")
     data.setdefault("forced_join_bot", join_helper_id or "")
     if not data.get("forced_join_bot") and join_helper_id:
         data["forced_join_bot"] = join_helper_id
@@ -290,6 +296,15 @@ def _monshi2_defaults(data):
         data["forced_join_groups"] = []
     if not isinstance(data.get("forced_join_user_overrides"), dict):
         data["forced_join_user_overrides"] = {}
+    if not isinstance(data.get("forced_join_last_sent"), dict):
+        data["forced_join_last_sent"] = {}
+    if not isinstance(data.get("forced_join_stats"), dict):
+        data["forced_join_stats"] = {}
+    try:
+        data["forced_join_cooldown"] = max(0, int(data.get("forced_join_cooldown", 60)))
+    except Exception:
+        data["forced_join_cooldown"] = 60
+    data["forced_join_delete_on_success"] = "on" if str(data.get("forced_join_delete_on_success", "on")).lower() == "on" else "off"
     return data
 
 
@@ -344,6 +359,70 @@ async def _resolve_monshi2_target_user(client, message, arg_index=3):
     except Exception:
         pass
     return None
+
+
+def _monshi2_stats(data):
+    data = _monshi2_defaults(data)
+    stats = data.get("forced_join_stats", {})
+    if not isinstance(stats, dict):
+        stats = {}
+    for key in ["blocked_messages", "panels_sent", "cooldown_skipped", "verify_clicks", "verify_success", "verify_failed", "panels_deleted"]:
+        try:
+            stats[key] = int(stats.get(key, 0))
+        except Exception:
+            stats[key] = 0
+    data["forced_join_stats"] = stats
+    return stats
+
+
+def _monshi2_inc_stat(data, key, amount=1):
+    stats = _monshi2_stats(data)
+    stats[key] = int(stats.get(key, 0)) + int(amount)
+    data["forced_join_stats"] = stats
+    return data
+
+
+def _monshi2_is_human_private_message(message):
+    """Monshi2 must affect only real human users in private chat."""
+    try:
+        if not getattr(message, "chat", None):
+            return False
+        chat_type = str(getattr(message.chat, "type", "")).lower()
+        if "private" not in chat_type:
+            return False
+        user = getattr(message, "from_user", None)
+        if user is None:
+            return False
+        if bool(getattr(user, "is_bot", False)):
+            return False
+        if str(getattr(user, "id", "")) == str(admin):
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def _monshi2_cooldown_active(data, user_id):
+    data = _monshi2_defaults(data)
+    cooldown = int(data.get("forced_join_cooldown", 60) or 0)
+    if cooldown <= 0:
+        return False, 0
+    last_map = data.get("forced_join_last_sent", {}) if isinstance(data.get("forced_join_last_sent"), dict) else {}
+    try:
+        last_ts = int(float(last_map.get(str(user_id), 0) or 0))
+    except Exception:
+        last_ts = 0
+    now_ts = int(time.time())
+    remain = cooldown - (now_ts - last_ts)
+    return remain > 0, max(0, remain)
+
+
+def _monshi2_mark_panel_sent(data, user_id):
+    data = _monshi2_defaults(data)
+    last_map = data.get("forced_join_last_sent", {}) if isinstance(data.get("forced_join_last_sent"), dict) else {}
+    last_map[str(user_id)] = int(time.time())
+    data["forced_join_last_sent"] = last_map
+    return data
 
 
 def _save_monshi2_data(data):
@@ -475,8 +554,11 @@ async def _send_forced_join_prompt(client, message, data, missing=None):
     token = base64.urlsafe_b64encode(os.urandom(12)).decode("ascii").rstrip("=")
     payload = {
         "u": int(message.chat.id),
+        "owner": int(admin),
         "t": text_for_payload,
-        "nt": "شما هنوز کامل جوین چنل ها نشده اید",
+        "nt": (data.get("forced_join_notjoined_text") or "شما هنوز کامل جوین چنل ها نشده اید")[:1000],
+        "st": (data.get("forced_join_success_text") or "✅ عضویت شما تأیید شد")[:1000],
+        "delete_success": data.get("forced_join_delete_on_success", "on"),
         "r": clean_reqs,
         "created": int(time.time()) if "time" in globals() else 0,
     }
@@ -528,7 +610,13 @@ async def _send_forced_join_prompt(client, message, data, missing=None):
         count = len(getattr(results, "results", []) or [])
         print(f"Forced Join inline result count from @{target_join_bot}: {count}")
         if results and results.results:
-            await client.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
+            sent_panel = await client.send_inline_bot_result(message.chat.id, results.query_id, results.results[0].id)
+            try:
+                panel_msg_id = getattr(sent_panel, "id", None)
+                if panel_msg_id:
+                    await client.send_message(target_join_bot, f"/fjmsg {token} {message.chat.id} {panel_msg_id}")
+            except Exception as msg_exc:
+                print(f"Forced Join panel message register failed: {msg_exc}")
             return True
         await _warn_admin(
             f"⚠️ Monshi2 خطا: ربات @{target_join_bot} برای token پنل نتیجه نداد.\n"
@@ -819,17 +907,72 @@ def extract_transaction_link(input_text):
     else:
         return None
         
+
+@app.on_message(filters.private & filters.incoming & filters.text, group=-60)
+async def monshi2_join_helper_relay(app, message: Message):
+    """Receive internal verify/delete events from the dedicated Join Helper bot."""
+    text = (message.text or "").strip()
+    if not (text.startswith("/fjdelete") or text.startswith("/fjstat")):
+        return
+    data = _monshi2_defaults(json_read("data.json"))
+    expected_bot = _clean_chat_ref(data.get("forced_join_bot") or join_helper_id).lower()
+    sender = getattr(message, "from_user", None)
+    sender_username = _clean_chat_ref(getattr(sender, "username", "") or "").lower()
+    if expected_bot and sender_username and sender_username != expected_bot:
+        return
+    try:
+        parts = text.split()
+        if parts[0] == "/fjdelete" and len(parts) >= 3:
+            chat_id = int(parts[1])
+            msg_id = int(parts[2])
+            try:
+                await app.delete_messages(chat_id, msg_id)
+                _monshi2_inc_stat(data, "panels_deleted", 1)
+                _save_monshi2_data(data)
+            except Exception as exc:
+                print(f"Monshi2 panel delete failed: {exc}")
+        elif parts[0] == "/fjstat" and len(parts) >= 2:
+            kind = parts[1].lower()
+            _monshi2_inc_stat(data, "verify_clicks", 1)
+            if kind == "success":
+                _monshi2_inc_stat(data, "verify_success", 1)
+            elif kind == "fail":
+                _monshi2_inc_stat(data, "verify_failed", 1)
+            _save_monshi2_data(data)
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        raise StopPropagation
+    except StopPropagation:
+        raise
+    except Exception as exc:
+        print(f"Monshi2 join-helper relay failed: {exc}")
+
 @app.on_message(filters.private & filters.incoming, group=3344)
 async def forward_to_channel(app, message):
+    if not _monshi2_is_human_private_message(message):
+        return
     data = _monshi2_defaults(json_read("data.json"))
-    if _monshi2_effective_status(data, message.chat.id) == "on" and str(message.chat.id) != str(admin):
-        missing = await _check_forced_join_membership(app, message.chat.id, data)
+    user_id = message.chat.id
+    if _monshi2_effective_status(data, user_id) == "on":
+        missing = await _check_forced_join_membership(app, user_id, data)
         if missing:
             try:
                 await message.delete()
             except Exception:
                 pass
-            await _send_forced_join_prompt(app, message, data, missing)
+            _monshi2_inc_stat(data, "blocked_messages", 1)
+            active, remain = _monshi2_cooldown_active(data, user_id)
+            if active:
+                _monshi2_inc_stat(data, "cooldown_skipped", 1)
+                _save_monshi2_data(data)
+                raise StopPropagation
+            sent_ok = await _send_forced_join_prompt(app, message, data, missing)
+            if sent_ok:
+                _monshi2_mark_panel_sent(data, user_id)
+                _monshi2_inc_stat(data, "panels_sent", 1)
+            _save_monshi2_data(data)
             raise StopPropagation
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @app.on_message(filters.incoming , group=333)      
@@ -5982,6 +6125,11 @@ async def safe_monshi2_command(app, message: Message):
     .monshi2 text Your custom text
     .monshi2 photo / setphoto        (reply to a photo)
     .monshi2 delphoto
+    .monshi2 cooldown 60
+    .monshi2 stats / clearstats
+    .monshi2 notjoinedtext Your text
+    .monshi2 successtext Your text
+    .monshi2 deletesuccess on/off
     .monshi2 user on/off @user        (per-user forced join override)
     .monshi2 user del @user
     .monshi2 users
@@ -6064,6 +6212,66 @@ async def safe_monshi2_command(app, message: Message):
             await message.edit_text(f"❖ Removed `{removed}` item(s) for @{ref}.")
             raise StopPropagation
 
+        if action == "cooldown":
+            if len(parts) < 3 or not str(parts[2]).lstrip("-").isdigit():
+                await message.edit_text("❖ Usage: `.monshi2 cooldown 60`\nUse `0` to disable anti-spam cooldown.")
+                raise StopPropagation
+            seconds = max(0, int(parts[2]))
+            data["forced_join_cooldown"] = seconds
+            _save_monshi2_data(data)
+            await message.edit_text(f"❖ Monshi2 PV anti-spam cooldown set to `{seconds}` seconds.")
+            raise StopPropagation
+
+        if action in ["notjoinedtext", "failtext", "failedtext"]:
+            if len(parts) < 3:
+                await message.edit_text("❖ Usage: `.monshi2 notjoinedtext شما هنوز کامل جوین چنل ها نشده اید`")
+                raise StopPropagation
+            data["forced_join_notjoined_text"] = (message.text or "").split(maxsplit=2)[2]
+            _save_monshi2_data(data)
+            await message.edit_text("❖ Not-joined verification text updated.")
+            raise StopPropagation
+
+        if action in ["successtext", "successtxt", "success_text"]:
+            if len(parts) < 3:
+                await message.edit_text("❖ Usage: `.monshi2 successtext عضویت شما تأیید شد`")
+                raise StopPropagation
+            data["forced_join_success_text"] = (message.text or "").split(maxsplit=2)[2]
+            _save_monshi2_data(data)
+            await message.edit_text("❖ Success verification text updated.")
+            raise StopPropagation
+
+        if action in ["deletesuccess", "successdelete"]:
+            if len(parts) < 3 or parts[2].lower() not in ["on", "off"]:
+                await message.edit_text("❖ Usage: `.monshi2 deletesuccess on/off`")
+                raise StopPropagation
+            data["forced_join_delete_on_success"] = parts[2].lower()
+            _save_monshi2_data(data)
+            await message.edit_text(f"❖ Delete panel after successful verification: **{parts[2].upper()}**")
+            raise StopPropagation
+
+        if action in ["stats", "stat"]:
+            stats = _monshi2_stats(data)
+            lines = [
+                "❖ **Monshi2 Stats**",
+                f"Blocked PV messages: `{stats.get('blocked_messages', 0)}`",
+                f"Panels sent: `{stats.get('panels_sent', 0)}`",
+                f"Cooldown skipped: `{stats.get('cooldown_skipped', 0)}`",
+                f"Verify clicks: `{stats.get('verify_clicks', 0)}`",
+                f"Verify success: `{stats.get('verify_success', 0)}`",
+                f"Verify failed: `{stats.get('verify_failed', 0)}`",
+                f"Panels deleted: `{stats.get('panels_deleted', 0)}`",
+                "\nClear: `.monshi2 clearstats`"
+            ]
+            await message.edit_text("\n".join(lines))
+            raise StopPropagation
+
+        if action in ["clearstats", "resetstats"]:
+            data["forced_join_stats"] = {}
+            _monshi2_stats(data)
+            _save_monshi2_data(data)
+            await message.edit_text("❖ Monshi2 stats cleared.")
+            raise StopPropagation
+
         if action in ["user", "users", "userlist"]:
             if action in ["users", "userlist"] or (len(parts) >= 2 and action == "user" and len(parts) < 3):
                 overrides = _monshi2_user_overrides(data)
@@ -6107,7 +6315,7 @@ async def safe_monshi2_command(app, message: Message):
         if action == "list":
             reqs = _monshi2_requirements(data)
             overrides = _monshi2_user_overrides(data)
-            lines = [f"❖ **Monshi2 Global:** `{data.get('monshi2')}`", f"❖ **Join Bot:** `@{data.get('forced_join_bot') or join_helper_id or 'NOT SET'}`", f"❖ **User Overrides:** `{len(overrides)}`", ""]
+            lines = [f"❖ **Monshi2 Global:** `{data.get('monshi2')}`", f"❖ **Join Bot:** `@{data.get('forced_join_bot') or join_helper_id or 'NOT SET'}`", f"❖ **PV Cooldown:** `{data.get('forced_join_cooldown', 60)}s`", f"❖ **Delete Success Panel:** `{data.get('forced_join_delete_on_success', 'on')}`", f"❖ **User Overrides:** `{len(overrides)}`", ""]
             if reqs:
                 for i, item in enumerate(reqs, start=1):
                     icon = "📢" if item.get("type") == "channel" else "👥"
@@ -6116,6 +6324,9 @@ async def safe_monshi2_command(app, message: Message):
                 lines.append("Forced Join list is empty.")
             lines.append("\nText: " + (data.get("forced_join_text") or "—")[:400])
             lines.append("Photo: " + ("✅" if data.get("forced_join_photo") else "❌"))
+            lines.append("NotJoinedText: " + (data.get("forced_join_notjoined_text") or "—")[:120])
+            lines.append("SuccessText: " + (data.get("forced_join_success_text") or "—")[:120])
+            lines.append("Stats: use `.monshi2 stats`")
             lines.append("Users: use `.monshi2 users`")
             await message.edit_text("\n".join(lines))
             raise StopPropagation
@@ -6173,6 +6384,11 @@ async def safe_monshi2_command(app, message: Message):
             "`.monshi2 list`\n"
             "`.monshi2 text Your message`\n"
             "`.monshi2 photo` or `.monshi2 setphoto` (reply photo)\n"
+            "`.monshi2 cooldown 60`\n"
+            "`.monshi2 stats` / `.monshi2 clearstats`\n"
+            "`.monshi2 notjoinedtext Your text`\n"
+            "`.monshi2 successtext Your text`\n"
+            "`.monshi2 deletesuccess on/off`\n"
             "`.monshi2 user on/off @user` (per-user)\n"
             "`.monshi2 users`\n"
             "`.monshi2 test`"
