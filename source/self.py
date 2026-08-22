@@ -1529,7 +1529,7 @@ def _ai_data_defaults(data):
         data = {}
     data.setdefault("ai_voice", "fa-female")
     data.setdefault("ai_voice_format", "audio")
-    data.setdefault("ai_engine", "majidapi-gpt-35")
+    data.setdefault("ai_engine", "my")
     data.setdefault("ai_memory", [])
     data.setdefault("ai_history", [])
     if not isinstance(data.get("ai_memory"), list):
@@ -1578,87 +1578,67 @@ def _ai_env(name, default=""):
 
 
 async def _ai_text_request(prompt, data):
-    """Text AI via MajidAPI GPT-3.5 Turbo with persistent memory.
+    """Text AI via 9Router OpenAI-compatible /chat/completions.
 
-    MajidAPI endpoint is simple (?q=QUESTION), so memory/history are injected
-    into the question text before sending. No router/proxy config is used.
+    Conversation memory/history are preserved exactly by injecting them into the
+    system prompt before sending the request.
     """
-    token = _ai_env("MAJIDAPI_TOKEN", _ai_env("MAJID_API_TOKEN", ""))
-    if not token:
-        raise RuntimeError("MAJIDAPI_TOKEN تنظیم نشده است. توکن MajidAPI را در Railway Variables بگذار.")
+    api_key = _ai_env("NINEROUTER_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("NINEROUTER_API_KEY تنظیم نشده است. کلید 9Router را در Railway Variables بگذار.")
+
+    base_url = _ai_env("NINEROUTER_BASE_URL", "https://9router-production-8331.up.railway.app/v1").rstrip("/")
+    model = _ai_env("NINEROUTER_MODEL", "my")
 
     memory = data.get("ai_memory", []) if isinstance(data.get("ai_memory"), list) else []
     history = data.get("ai_history", []) if isinstance(data.get("ai_history"), list) else []
     memory_text = "\n".join([f"- {str(x.get('text', x))[:600]}" for x in memory[-50:]])
-    history_text = "\n".join([
-        f"{('کاربر' if x.get('role') == 'user' else 'دستیار')}: {str(x.get('content', ''))[:500]}"
-        for x in history[-10:]
-        if x.get("role") in ["user", "assistant"] and str(x.get("content", "")).strip()
-    ])
-    full_question = (
+
+    system_prompt = (
         "تو دستیار هوشمند TiTaN Self هستی. پیش‌فرض فارسی، دقیق، مفید و حرفه‌ای جواب بده.\n"
         "از حافظه زیر به عنوان دانسته‌های پایدار کاربر استفاده کن. اگر چیزی در حافظه نبود، حدس نزن.\n\n"
-        f"[حافظه دائمی]\n{memory_text if memory_text else '- موردی ثبت نشده است.'}\n\n"
-        f"[تاریخچه کوتاه گفتگو]\n{history_text if history_text else '- تاریخچه‌ای نیست.'}\n\n"
-        f"[سؤال جدید کاربر]\n{prompt}"
+        f"[حافظه دائمی]\n{memory_text if memory_text else '- موردی ثبت نشده است.'}"
     )
-    # Keep URL/query safe and avoid oversized requests.
-    if len(full_question) > 6500:
-        full_question = full_question[-6500:]
 
-    def extract_answer(obj):
-        if isinstance(obj, str):
-            return obj.strip()
-        if isinstance(obj, dict):
-            preferred = ["answer", "message", "result", "text", "response", "content", "reply", "data"]
-            for key in preferred:
-                val = obj.get(key)
-                if isinstance(val, str) and val.strip():
-                    return val.strip()
-                if isinstance(val, dict):
-                    nested = extract_answer(val)
-                    if nested:
-                        return nested
-                if isinstance(val, list):
-                    nested = extract_answer(val)
-                    if nested:
-                        return nested
-            # OpenAI-like fallback
-            try:
-                return obj["choices"][0]["message"]["content"].strip()
-            except Exception:
-                pass
-        if isinstance(obj, list):
-            for item in obj:
-                nested = extract_answer(item)
-                if nested:
-                    return nested
-        return ""
+    messages = [{"role": "system", "content": system_prompt}]
+    for item in history[-10:]:
+        role = item.get("role")
+        content = str(item.get("content", "")).strip()
+        if role in ["user", "assistant"] and content:
+            messages.append({"role": role, "content": content[:1200]})
+    messages.append({"role": "user", "content": prompt})
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": float(_ai_env("NINEROUTER_TEMPERATURE", "0.7") or 0.7),
+        "max_tokens": int(_ai_env("NINEROUTER_MAX_TOKENS", "1800") or 1800),
+    }
 
     def run():
-        r = requests.get(
-            "https://api.majidapi.ir/gpt/35",
-            params={"q": full_question, "token": token},
-            headers={"Authorization": f"Bearer {token}", "User-Agent": "TiTaN-Self-AI-Pro/7.5"},
+        r = requests.post(
+            base_url + "/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
             timeout=120,
         )
         if r.status_code >= 400:
-            raise RuntimeError(f"MajidAPI GPT {r.status_code}: {r.text[:900]}")
+            raise RuntimeError(f"9Router API {r.status_code}: {r.text[:900]}")
+        obj = r.json()
         try:
-            obj = r.json()
-            answer = extract_answer(obj)
+            answer = obj["choices"][0]["message"]["content"].strip()
         except Exception:
-            answer = r.text.strip()
+            answer = ""
         if not answer:
-            raise RuntimeError(f"MajidAPI پاسخ خالی/نامعتبر داد: {r.text[:500]}")
+            raise RuntimeError(f"9Router پاسخ خالی/نامعتبر داد: {str(obj)[:500]}")
         return answer
 
     answer = await asyncio.to_thread(run)
     history.append({"role": "user", "content": prompt, "ts": int(time.time())})
     history.append({"role": "assistant", "content": answer[:2500], "ts": int(time.time())})
     data["ai_history"] = history[-30:]
-    data["ai_engine"] = "majidapi-gpt-35"
-    return answer, "MajidAPI GPT-3.5 Turbo"
+    data["ai_engine"] = model
+    return answer, model
 
 
 async def _ai_show_memory(message, data):
@@ -1678,7 +1658,7 @@ async def ai_pro_text_majidapi(app, m: Message):
     data = _ai_data_defaults(json_read("data.json"))
     prompt = _ai_reply_or_arg(m)
     if not prompt:
-        await _ai_error(m, "MajidAPI AI", "متن سوال خالی است", ".ai سوال شما")
+        await _ai_error(m, "9Router AI", "متن سوال خالی است", ".ai سوال شما")
         raise StopPropagation
 
     cmd = prompt.strip()
@@ -1733,15 +1713,15 @@ async def ai_pro_text_majidapi(app, m: Message):
         await _ai_error(m, "AI Memory", e, ".ai learn متن آموزشی")
         raise StopPropagation
 
-    await _ai_edit(m, _ai_box("MajidAPI AI", [("Status", "Thinking…"), ("Model", data.get("ai_engine", "majidapi-gpt-35")), ("Prompt", prompt[:180])], footer="MajidAPI GPT-3.5 Turbo"))
+    await _ai_edit(m, _ai_box("9Router AI", [("Status", "Thinking…"), ("Model", data.get("ai_engine", "my")), ("Prompt", prompt[:180])], footer="9Router"))
     try:
         answer, model = await _ai_text_request(prompt, data)
         _ai_save_data(data)
-        header = _ai_box("MajidAPI AI Response", [("Model", model), ("Memory", len(data.get("ai_memory", []))), ("Prompt", prompt[:140])], footer="TiTaN AI Pro")
+        header = _ai_box("9Router AI Response", [("Model", model), ("Memory", len(data.get("ai_memory", []))), ("Prompt", prompt[:140])], footer="TiTaN AI Pro")
         body = answer[:3300] + ("\n…" if len(answer) > 3300 else "")
         await _ai_edit(m, f"{header}\n\n<b>Answer:</b>\n{_tools_html(body) if '_tools_html' in globals() else body}")
     except Exception as e:
-        await _ai_error(m, "MajidAPI AI", e, ".ai سلام")
+        await _ai_error(m, "9Router AI", e, ".ai سلام")
     raise StopPropagation
 
 
