@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-18-dedicated-join-helper-final-v5-0-monshi2-pro"
+FIX_VERSION = "2026-08-22-ai-pro-majidapi-gpt35-v7-5"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -734,6 +734,1348 @@ if_not_exist_creat("allSPEAKING.txt")
 #_________________________Client___________________________________
 app = Client(f"../../sessions/{admin}", api_id, api_hash, device_model="ULTRA-SELF", system_version="Linux")
 client = Client("Self", api_id, api_hash, device_model="ULTRA-SELF", system_version="Linux")
+
+
+# ================= Tools Pro / Core Repair v7.1 =================
+_TOOLS_VERSION = "2026-08-21-tools-core-pro-v7-1"
+_TOOLS_TIMEOUT = 12
+
+
+def _tools_arg(message, command_names=None):
+    text = (getattr(message, "text", None) or "").strip()
+    if not text:
+        return ""
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2:
+        return ""
+    return parts[1].strip()
+
+
+def _tools_reply_or_arg(message):
+    arg = _tools_arg(message)
+    if arg:
+        return arg
+    reply = getattr(message, "reply_to_message", None)
+    if reply:
+        return (getattr(reply, "text", None) or getattr(reply, "caption", None) or "").strip()
+    return ""
+
+
+def _tools_html(value):
+    return html.escape(str(value if value is not None else "—"))
+
+
+def _tools_box(title, rows=None, footer="TiTaN Tools Pro"):
+    rows = rows or []
+    text = [
+        "╭━━━ ✦ <b>{}</b> ✦ ━━━╮".format(_tools_html(title)),
+    ]
+    for key, value in rows:
+        text.append(f"┃ <b>{_tools_html(key)}:</b> <code>{_tools_html(value)}</code>")
+    text.append("╰━━━━━━━━━━━━━━━━━━━━╯")
+    if footer:
+        text.append(f"<i>{_tools_html(footer)}</i>")
+    return "\n".join(text)
+
+
+async def _tools_edit(message, text):
+    try:
+        return await message.edit_text(text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+    except Exception:
+        try:
+            return await message.reply_text(text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+        except Exception:
+            return None
+
+
+async def _tools_error(message, title, error, usage=None):
+    rows = [("Status", "Failed"), ("Reason", str(error)[:500])]
+    if usage:
+        rows.append(("Usage", usage))
+    return await _tools_edit(message, _tools_box(title, rows, footer="No crash; API-safe response"))
+
+
+def _tools_requests_get(url, **kwargs):
+    headers = kwargs.pop("headers", {}) or {}
+    headers.setdefault("User-Agent", "TiTaN-Self-Tools-Pro/7.1")
+    return requests.get(url, timeout=kwargs.pop("timeout", _TOOLS_TIMEOUT), headers=headers, **kwargs)
+
+
+async def _tools_get_json(url, **kwargs):
+    def run():
+        r = _tools_requests_get(url, **kwargs)
+        r.raise_for_status()
+        return r.json()
+    return await asyncio.to_thread(run)
+
+
+async def _tools_get_text(url, **kwargs):
+    def run():
+        r = _tools_requests_get(url, **kwargs)
+        r.raise_for_status()
+        return r.text.strip()
+    return await asyncio.to_thread(run)
+
+
+def _tools_normalize_url(url):
+    url = str(url or "").strip()
+    if not url:
+        return ""
+    if not re.match(r"^https?://", url, re.I):
+        url = "https://" + url
+    return url
+
+
+@app.on_message(filters.command(["weather", "w"], ".") & filters.me, group=-80)
+async def tools_pro_weather(app, m: Message):
+    city = _tools_arg(m)
+    if not city:
+        await _tools_error(m, "Weather", "City is required", ".weather Tehran")
+        raise StopPropagation
+    await _tools_edit(m, _tools_box("Weather", [("Status", "Fetching…"), ("City", city)]))
+    try:
+        data = await _tools_get_json(f"https://wttr.in/{urllib.parse.quote(city)}", params={"format": "j1"})
+        current = (data.get("current_condition") or [{}])[0]
+        area = (data.get("nearest_area") or [{}])[0]
+        name = ((area.get("areaName") or [{}])[0].get("value") or city)
+        country = ((area.get("country") or [{}])[0].get("value") or "—")
+        rows = [
+            ("City", f"{name}, {country}"),
+            ("Temperature", f"{current.get('temp_C', '—')}°C / {current.get('temp_F', '—')}°F"),
+            ("Feels Like", f"{current.get('FeelsLikeC', '—')}°C"),
+            ("Condition", ((current.get("weatherDesc") or [{}])[0].get("value") or "—")),
+            ("Humidity", f"{current.get('humidity', '—')}%"),
+            ("Wind", f"{current.get('windspeedKmph', '—')} km/h"),
+        ]
+        await _tools_edit(m, _tools_box("Premium Weather", rows))
+    except Exception as e:
+        await _tools_error(m, "Weather", e, ".weather Tehran")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["azan"], ".") & filters.me, group=-80)
+async def tools_pro_azan(app, m: Message):
+    city = _tools_arg(m)
+    if not city:
+        await _tools_error(m, "Prayer Times", "City/address is required", ".azan Tehran")
+        raise StopPropagation
+    await _tools_edit(m, _tools_box("Prayer Times", [("Status", "Fetching…"), ("Address", city)]))
+    try:
+        data = await _tools_get_json("https://api.aladhan.com/v1/timingsByAddress", params={"address": city, "method": 8})
+        obj = data.get("data", {})
+        timings = obj.get("timings", {})
+        date_obj = obj.get("date", {})
+        meta = obj.get("meta", {})
+        rows = [
+            ("Address", city),
+            ("Date", (date_obj.get("readable") or "—")),
+            ("Timezone", meta.get("timezone", "—")),
+            ("Fajr", timings.get("Fajr", "—")),
+            ("Sunrise", timings.get("Sunrise", "—")),
+            ("Dhuhr", timings.get("Dhuhr", "—")),
+            ("Asr", timings.get("Asr", "—")),
+            ("Maghrib", timings.get("Maghrib", "—")),
+            ("Isha", timings.get("Isha", "—")),
+        ]
+        await _tools_edit(m, _tools_box("Premium Azan", rows))
+    except Exception as e:
+        await _tools_error(m, "Prayer Times", e, ".azan Tehran")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["t"], ".") & filters.me, group=-80)
+async def tools_pro_temperature(app, m: Message):
+    arg = _tools_arg(m)
+    try:
+        parts = arg.split()
+        if len(parts) < 2:
+            raise ValueError("Need value and unit")
+        value = float(parts[0].replace(",", "."))
+        unit = parts[1].lower().strip()
+        if unit in ["c", "°c", "celsius"]:
+            c = value
+        elif unit in ["f", "°f", "fahrenheit"]:
+            c = (value - 32) * 5 / 9
+        elif unit in ["k", "kelvin"]:
+            c = value - 273.15
+        else:
+            raise ValueError("Unit must be c, f, or k")
+        f = c * 9 / 5 + 32
+        k = c + 273.15
+        rows = [("Celsius", f"{c:.2f} °C"), ("Fahrenheit", f"{f:.2f} °F"), ("Kelvin", f"{k:.2f} K")]
+        await _tools_edit(m, _tools_box("Temperature Converter", rows))
+    except Exception as e:
+        await _tools_error(m, "Temperature", e, ".t 25 c")
+    raise StopPropagation
+
+
+_MATH_ALLOWED_FUNCS = {name: getattr(math, name) for name in ["sqrt", "sin", "cos", "tan", "log", "log10", "floor", "ceil", "fabs"] if hasattr(math, name)}
+_MATH_ALLOWED_FUNCS.update({"abs": abs, "round": round, "pow": pow})
+_MATH_ALLOWED_NAMES = {"pi": math.pi, "e": math.e}
+
+
+def _safe_math_eval(expr):
+    import ast as _ast
+    import operator as _op
+    ops = {
+        _ast.Add: _op.add, _ast.Sub: _op.sub, _ast.Mult: _op.mul, _ast.Div: _op.truediv,
+        _ast.FloorDiv: _op.floordiv, _ast.Mod: _op.mod, _ast.Pow: _op.pow,
+        _ast.USub: _op.neg, _ast.UAdd: _op.pos,
+    }
+    def ev(node):
+        if isinstance(node, _ast.Expression):
+            return ev(node.body)
+        if isinstance(node, _ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, _ast.Num):
+            return node.n
+        if isinstance(node, _ast.BinOp) and type(node.op) in ops:
+            return ops[type(node.op)](ev(node.left), ev(node.right))
+        if isinstance(node, _ast.UnaryOp) and type(node.op) in ops:
+            return ops[type(node.op)](ev(node.operand))
+        if isinstance(node, _ast.Name) and node.id in _MATH_ALLOWED_NAMES:
+            return _MATH_ALLOWED_NAMES[node.id]
+        if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name) and node.func.id in _MATH_ALLOWED_FUNCS:
+            return _MATH_ALLOWED_FUNCS[node.func.id](*[ev(a) for a in node.args])
+        raise ValueError("Unsupported expression")
+    return ev(_ast.parse(expr, mode="eval"))
+
+
+@app.on_message(filters.command(["e"], ".") & filters.me, group=-80)
+async def tools_pro_calc(app, m: Message):
+    expr = _tools_arg(m)
+    if not expr:
+        await _tools_error(m, "Calculator", "Expression is required", ".e 2+2")
+        raise StopPropagation
+    try:
+        result = _safe_math_eval(expr)
+        await _tools_edit(m, _tools_box("Safe Calculator", [("Expression", expr), ("Result", result)]))
+    except Exception as e:
+        await _tools_error(m, "Calculator", e, ".e sqrt(25)+2")
+    raise StopPropagation
+
+
+_CRYPTO_IDS = {
+    "btc": "bitcoin", "bitcoin": "bitcoin", "eth": "ethereum", "ethereum": "ethereum",
+    "usdt": "tether", "tether": "tether", "usdc": "usd-coin", "bnb": "binancecoin",
+    "trx": "tron", "ton": "the-open-network", "ada": "cardano", "doge": "dogecoin",
+    "shib": "shiba-inu", "ltc": "litecoin", "xrp": "ripple", "sol": "solana",
+}
+_FIAT_ALIASES = {"toman": "toman", "irt": "toman", "tmn": "toman", "rial": "irr", "rls": "irr", "irr": "irr", "usd": "usd", "eur": "eur", "gbp": "gbp", "try": "try"}
+
+
+async def _coinbase_rate(src, dst):
+    """Stable no-key converter. Coinbase supports many crypto/fiat rates including IRR."""
+    src = str(src or "").upper()
+    dst = str(dst or "").upper()
+    data = await _tools_get_json("https://api.coinbase.com/v2/exchange-rates", params={"currency": src})
+    rates = (data.get("data") or {}).get("rates") or {}
+    if dst not in rates:
+        raise ValueError(f"Rate {src}->{dst} not available")
+    return float(rates[dst])
+
+
+async def _crypto_toman_rate(symbol):
+    """Return 1 SYMBOL price in Toman using robust fallback.
+
+    1) Coinbase direct SYMBOL->IRR if available.
+    2) CoinGecko SYMBOL->USD multiplied by Coinbase USDT->IRR.
+    """
+    sym = str(symbol or "").lower().strip()
+    try:
+        return await _coinbase_rate(sym.upper(), "IRR") / 10
+    except Exception:
+        coin_id = _MARKET_CRYPTO_SYMBOLS.get(sym, _CRYPTO_IDS.get(sym, sym)) if "_MARKET_CRYPTO_SYMBOLS" in globals() else _CRYPTO_IDS.get(sym, sym)
+        data = await _tools_get_json("https://api.coingecko.com/api/v3/simple/price", params={"ids": coin_id, "vs_currencies": "usd"})
+        usd_price = float(data[coin_id]["usd"])
+        usdt_irr = await _coinbase_rate("USDT", "IRR")
+        return usd_price * usdt_irr / 10
+
+
+@app.on_message(filters.command(["c"], ".") & filters.me, group=-80)
+async def tools_pro_currency(app, m: Message):
+    arg = _tools_arg(m)
+    try:
+        parts = arg.split()
+        if len(parts) < 3:
+            raise ValueError("Need amount, source, target")
+        amount = float(parts[0].replace(",", "."))
+        src = parts[1].lower()
+        dst = parts[2].lower()
+        if dst in ["toman", "irt", "tmn"]:
+            price = await _crypto_toman_rate(src)
+            result = amount * price
+            rows = [("Amount", f"{amount:g} {src.upper()}"), ("Price", f"{price:,.0f} TOMAN"), ("Result", f"{result:,.0f} TOMAN"), ("Source", "Coinbase/CoinGecko smart toman")]
+        else:
+            vs = _FIAT_ALIASES.get(dst, dst).upper()
+            try:
+                price = await _coinbase_rate(src, vs)
+                source_name = "Coinbase"
+            except Exception:
+                coin_id = _CRYPTO_IDS.get(src, src)
+                vs2 = _FIAT_ALIASES.get(dst, dst).lower()
+                data = await _tools_get_json("https://api.coingecko.com/api/v3/simple/price", params={"ids": coin_id, "vs_currencies": vs2})
+                price = float(data[coin_id][vs2])
+                source_name = "CoinGecko"
+            result = amount * price
+            rows = [("Amount", f"{amount:g} {src.upper()}"), ("Price", f"{price:,.8g} {dst.upper()}"), ("Result", f"{result:,.8g} {dst.upper()}"), ("Source", source_name)]
+        await _tools_edit(m, _tools_box("Crypto Converter", rows))
+    except Exception as e:
+        await _tools_error(m, "Crypto Converter", e, ".c 100 usdt toman")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["ip"], ".") & filters.me, group=-80)
+async def tools_pro_ip(app, m: Message):
+    host = _tools_arg(m).replace("https://", "").replace("http://", "").split("/")[0].strip()
+    if not host:
+        await _tools_error(m, "Domain IP", "Domain is required", ".ip google.com")
+        raise StopPropagation
+    try:
+        ip_addr = await asyncio.to_thread(gethostbyname, host)
+        await _tools_edit(m, _tools_box("Domain Resolver", [("Domain", host), ("IP", ip_addr)]))
+    except Exception as e:
+        await _tools_error(m, "Domain IP", e, ".ip google.com")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["whoisip"], ".") & filters.me, group=-80)
+async def tools_pro_whoisip(app, m: Message):
+    ip = _tools_arg(m)
+    if not ip:
+        await _tools_error(m, "IP Info", "IP is required", ".whoisip 8.8.8.8")
+        raise StopPropagation
+    try:
+        data = await _tools_get_json(f"https://ipwho.is/{urllib.parse.quote(ip)}")
+        if data.get("success") is False:
+            raise ValueError(data.get("message", "IP lookup failed"))
+        rows = [("IP", data.get("ip")), ("Country", data.get("country")), ("City", data.get("city")), ("ISP", (data.get("connection") or {}).get("isp")), ("Timezone", (data.get("timezone") or {}).get("id")), ("Lat/Lon", f"{data.get('latitude')}, {data.get('longitude')}")]
+        await _tools_edit(m, _tools_box("Premium IP Info", rows))
+    except Exception as e:
+        await _tools_error(m, "IP Info", e, ".whoisip 8.8.8.8")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["p", "ping", "پینگ"], ".") & filters.me, group=-80)
+async def tools_pro_ping(app, m: Message):
+    target = _tools_arg(m) or "https://telegram.org"
+    url = _tools_normalize_url(target)
+    try:
+        start = time.time()
+        def run():
+            return _tools_requests_get(url, timeout=8, allow_redirects=True)
+        r = await asyncio.to_thread(run)
+        latency = (time.time() - start) * 1000
+        rows = [("Target", url), ("Status", r.status_code), ("Latency", f"{latency:.0f} ms"), ("Server", r.headers.get("server", "—"))]
+        await _tools_edit(m, _tools_box("HTTP Ping", rows))
+    except Exception as e:
+        await _tools_error(m, "Ping", e, ".p google.com")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["link", "link2"], ".") & filters.me, group=-80)
+async def tools_pro_shortlink(app, m: Message):
+    url = _tools_reply_or_arg(m)
+    if not url:
+        await _tools_error(m, "Short Link", "URL is required", ".link https://example.com")
+        raise StopPropagation
+    url = _tools_normalize_url(url)
+    try:
+        short = await _tools_get_text("https://tinyurl.com/api-create.php", params={"url": url})
+        if not short.startswith("http"):
+            raise ValueError(short[:200])
+        rows = [("Original", url[:160]), ("Short", short)]
+        await _tools_edit(m, _tools_box("Premium Shortener", rows))
+    except Exception as e:
+        await _tools_error(m, "Short Link", e, ".link https://example.com")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["github"], ".") & filters.me, group=-80)
+async def tools_pro_github(app, m: Message):
+    username = _tools_arg(m).strip().lstrip("@")
+    if not username:
+        await _tools_error(m, "GitHub User", "Username is required", ".github torvalds")
+        raise StopPropagation
+    try:
+        data = await _tools_get_json(f"https://api.github.com/users/{urllib.parse.quote(username)}")
+        rows = [("Name", data.get("name") or data.get("login")), ("Username", data.get("login")), ("Followers", data.get("followers")), ("Following", data.get("following")), ("Repos", data.get("public_repos")), ("Company", data.get("company") or "—"), ("Location", data.get("location") or "—"), ("Profile", data.get("html_url"))]
+        await _tools_edit(m, _tools_box("GitHub Profile", rows))
+    except Exception as e:
+        await _tools_error(m, "GitHub User", e, ".github torvalds")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["git"], ".") & filters.me, group=-80)
+async def tools_pro_git_repo(app, m: Message):
+    query = _tools_arg(m)
+    if not query:
+        await _tools_error(m, "GitHub Repo", "Repo or search text is required", ".git owner/repo")
+        raise StopPropagation
+    try:
+        if "/" in query and len(query.split("/")) >= 2:
+            owner, repo = query.split("/", 1)
+            data = await _tools_get_json(f"https://api.github.com/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}")
+        else:
+            sr = await _tools_get_json("https://api.github.com/search/repositories", params={"q": query, "sort": "stars", "order": "desc", "per_page": 1})
+            items = sr.get("items") or []
+            if not items:
+                raise ValueError("No repository found")
+            data = items[0]
+        rows = [("Repo", data.get("full_name")), ("Stars", data.get("stargazers_count")), ("Forks", data.get("forks_count")), ("Language", data.get("language") or "—"), ("Issues", data.get("open_issues_count")), ("Updated", data.get("updated_at")), ("URL", data.get("html_url"))]
+        await _tools_edit(m, _tools_box("GitHub Repository", rows))
+    except Exception as e:
+        await _tools_error(m, "GitHub Repo", e, ".git owner/repo")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["dictionary", "dict"], ".") & filters.me, group=-80)
+async def tools_pro_dictionary(app, m: Message):
+    word = _tools_arg(m).strip()
+    if not word:
+        await _tools_error(m, "Dictionary", "Word is required", ".dict hello")
+        raise StopPropagation
+    try:
+        data = await _tools_get_json(f"https://api.dictionaryapi.dev/api/v2/entries/en/{urllib.parse.quote(word)}")
+        entry = data[0]
+        phonetic = entry.get("phonetic") or "—"
+        meanings = entry.get("meanings") or []
+        rows = [("Word", entry.get("word", word)), ("Phonetic", phonetic)]
+        if meanings:
+            m0 = meanings[0]
+            defs = m0.get("definitions") or []
+            rows.append(("Part", m0.get("partOfSpeech", "—")))
+            if defs:
+                rows.append(("Meaning", defs[0].get("definition", "—")[:500]))
+                if defs[0].get("example"):
+                    rows.append(("Example", defs[0].get("example")[:300]))
+        await _tools_edit(m, _tools_box("Premium Dictionary", rows))
+    except Exception as e:
+        await _tools_error(m, "Dictionary", e, ".dict hello")
+    raise StopPropagation
+
+
+
+@app.on_message(filters.command(["check"], ".") & filters.me, group=-80)
+async def tools_pro_number_check(app, m: Message):
+    number = _tools_arg(m).replace(" ", "")
+    if not number:
+        await _tools_error(m, "Number Check", "Phone number is required", ".check +491234567890")
+        raise StopPropagation
+    try:
+        import phonenumbers
+        from phonenumbers import carrier, geocoder, timezone as pn_timezone
+        parsed = phonenumbers.parse(number, None)
+        rows = [
+            ("Number", phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL)),
+            ("Valid", "YES" if phonenumbers.is_valid_number(parsed) else "NO"),
+            ("Possible", "YES" if phonenumbers.is_possible_number(parsed) else "NO"),
+            ("Country", geocoder.description_for_number(parsed, "en") or "—"),
+            ("Carrier", carrier.name_for_number(parsed, "en") or "—"),
+            ("Timezone", ", ".join(pn_timezone.time_zones_for_number(parsed)) or "—"),
+        ]
+        await _tools_edit(m, _tools_box("Premium Number Check", rows, footer="Offline library; no broken API"))
+    except Exception as e:
+        await _tools_error(m, "Number Check", e, ".check +491234567890")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["shot", "screenshot", "screenshot2", "screenshot3", "screenshot4"], ".") & filters.me, group=-80)
+async def tools_pro_screenshot(app, m: Message):
+    url = _tools_reply_or_arg(m)
+    if not url:
+        await _tools_error(m, "Website Screenshot", "URL/domain is required", ".shot example.com")
+        raise StopPropagation
+    url = _tools_normalize_url(url)
+    await _tools_edit(m, _tools_box("Website Screenshot", [("Status", "Rendering…"), ("URL", url[:160])]))
+    try:
+        shot_url = "https://image.thum.io/get/width/1280/crop/900/noanimate/" + urllib.parse.quote(url, safe=":/")
+        # Validate service before asking Telegram to fetch it.
+        def probe():
+            r = _tools_requests_get(shot_url, timeout=18)
+            r.raise_for_status()
+            ctype = r.headers.get("content-type", "")
+            if "image" not in ctype.lower():
+                raise ValueError(f"Screenshot service returned {ctype}")
+            return len(r.content)
+        size = await asyncio.to_thread(probe)
+        caption = _tools_box("Premium WebShot", [("URL", url[:160]), ("Engine", "thum.io"), ("Size", f"{size/1024:.1f} KB")])
+        await app.send_photo(m.chat.id, shot_url, caption=caption, parse_mode=enums.ParseMode.HTML, reply_to_message_id=m.id)
+        try:
+            await m.delete()
+        except Exception:
+            pass
+    except Exception as e:
+        await _tools_error(m, "Website Screenshot", e, ".shot example.com")
+    raise StopPropagation
+
+# ================= End Tools Pro / Core Repair =================
+
+
+# ================= Market Pro / Iran + Crypto v7.2 =================
+_MARKET_VERSION = "2026-08-21-market-pro-v7-2"
+_MARKET_CRYPTO_SYMBOLS = {
+    "btc": "bitcoin", "bitcoin": "bitcoin",
+    "eth": "ethereum", "ethereum": "ethereum",
+    "usdt": "tether", "tether": "tether",
+    "trx": "tron", "tron": "tron",
+    "ton": "the-open-network", "toncoin": "the-open-network",
+    "bnb": "binancecoin", "xrp": "ripple", "ada": "cardano",
+    "doge": "dogecoin", "shib": "shiba-inu", "sol": "solana",
+    "ltc": "litecoin", "bch": "bitcoin-cash", "link": "chainlink",
+    "dot": "polkadot", "matic": "matic-network", "avax": "avalanche-2",
+    "usdc": "usd-coin", "dai": "dai", "etc": "ethereum-classic",
+    "uni": "uniswap", "aave": "aave", "sand": "the-sandbox",
+    "mana": "decentraland", "ftm": "fantom", "axs": "axie-infinity",
+}
+
+
+def _market_money(value, suffix="تومان"):
+    try:
+        return f"{float(value):,.0f} {suffix}"
+    except Exception:
+        return str(value or "—")
+
+
+def _market_extract_price_text(text):
+    text = str(text or "")
+    m = re.search(r"([\d۰-۹٠-٩][\d۰-۹٠-٩,\.٬\s]{2,})\s*(تومان|ریال|ريال)", text)
+    return m.group(0).strip() if m else "—"
+
+
+def _market_clean_snippet(text, limit=300):
+    text = re.sub(r"\s+", " ", html.unescape(str(text or ""))).strip()
+    return text[:limit] + ("…" if len(text) > limit else "")
+
+
+async def _market_ddg_site_search(query, site, label):
+    """Fallback for Iranian marketplaces when their public API is blocked/slow."""
+    q = f"site:{site} {query} قیمت"
+    def run():
+        r = _tools_requests_get("https://html.duckduckgo.com/html/", params={"q": q}, timeout=14)
+        r.raise_for_status()
+        return r.text
+    raw = await asyncio.to_thread(run)
+    # Very small, dependency-free extraction of first result.
+    title = "—"; link = f"https://{site}"; snippet = "—"
+    mt = re.search(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', raw, re.S)
+    if mt:
+        link = html.unescape(mt.group(1))
+        title = re.sub(r"<.*?>", "", mt.group(2))
+        title = _market_clean_snippet(title, 120)
+    ms = re.search(r'class="result__snippet"[^>]*>(.*?)</a>', raw, re.S)
+    if ms:
+        snippet = _market_clean_snippet(re.sub(r"<.*?>", "", ms.group(1)), 300)
+    price = _market_extract_price_text(snippet)
+    return {"engine": f"{label} Web Fallback", "title": title, "price": price, "shop": "—", "url": link, "snippet": snippet, "image": ""}
+
+
+async def _market_torob_search(query):
+    # Direct public Torob endpoint. Field names are parsed flexibly.
+    try:
+        data = await _tools_get_json("https://api.torob.com/v4/base-product/search/", params={"query": query, "page": 0}, timeout=16)
+        items = data.get("results") or data.get("result") or data.get("products") or []
+        if items:
+            item = items[0]
+            title = item.get("name1") or item.get("name") or item.get("title") or item.get("name2") or query
+            price = item.get("price_text") or item.get("price") or item.get("min_price") or "—"
+            if isinstance(price, (int, float)):
+                price = _market_money(price)
+            shop = item.get("shop_text") or item.get("shop") or item.get("seller") or "—"
+            image = item.get("image_url") or item.get("image") or ""
+            key = item.get("random_key") or item.get("id") or ""
+            url = item.get("web_client_absolute_url") or item.get("url") or (f"https://torob.com/p/{key}/" if key else f"https://torob.com/search/?query={urllib.parse.quote(query)}")
+            return {"engine": "Torob API", "title": title, "price": price, "shop": shop, "url": url, "snippet": "—", "image": image}
+    except Exception as exc:
+        print(f"Market Torob API failed: {exc}")
+    return await _market_ddg_site_search(query, "torob.com", "Torob")
+
+
+async def _market_basalam_search(query):
+    # Basalam public search endpoints are not always reachable outside Iran; try then fallback.
+    endpoints = [
+        ("https://search.basalam.com/ai-engine/api/v2.0/product/search", {"query": query}),
+        ("https://api.basalam.com/search/v2.0/product/search", {"query": query}),
+    ]
+    for url, params in endpoints:
+        try:
+            data = await _tools_get_json(url, params=params, timeout=14)
+            items = data.get("products") or data.get("result") or data.get("data") or data.get("items") or []
+            if isinstance(items, dict):
+                items = items.get("products") or items.get("items") or []
+            if items:
+                item = items[0]
+                title = item.get("title") or item.get("name") or item.get("name1") or query
+                price = item.get("price") or item.get("primary_price") or item.get("price_text") or "—"
+                if isinstance(price, (int, float)):
+                    price = _market_money(price)
+                shop = item.get("vendor_name") or (item.get("vendor") or {}).get("name") or item.get("shop") or "—"
+                image = item.get("photo") or item.get("image") or item.get("image_url") or ""
+                product_id = item.get("id") or item.get("product_id") or ""
+                link = item.get("url") or (f"https://basalam.com/p/{product_id}" if product_id else f"https://basalam.com/search?q={urllib.parse.quote(query)}")
+                return {"engine": "Basalam Search", "title": title, "price": price, "shop": shop, "url": link, "snippet": "—", "image": image}
+        except Exception as exc:
+            print(f"Market Basalam endpoint failed {url}: {exc}")
+    return await _market_ddg_site_search(query, "basalam.com", "Basalam")
+
+
+async def _market_send_product_result(app, m, title, result):
+    rows = [
+        ("Engine", result.get("engine", "—")),
+        ("Product", result.get("title", "—")),
+        ("Price", result.get("price", "—")),
+        ("Shop", result.get("shop", "—")),
+        ("Link", result.get("url", "—")),
+    ]
+    if result.get("snippet") and result.get("snippet") != "—":
+        rows.append(("Snippet", result.get("snippet")))
+    caption = _tools_box(title, rows, footer="TiTaN Market Pro")
+    image = result.get("image") or ""
+    try:
+        if image and str(image).startswith("http"):
+            await app.send_photo(m.chat.id, image, caption=caption[:1024], parse_mode=enums.ParseMode.HTML, reply_to_message_id=m.id)
+            try:
+                await m.delete()
+            except Exception:
+                pass
+        else:
+            await _tools_edit(m, caption)
+    except Exception:
+        await _tools_edit(m, caption)
+
+
+async def _market_crypto_market(symbol, vs="usd"):
+    sym = str(symbol or "").lower().strip()
+    coin_id = _MARKET_CRYPTO_SYMBOLS.get(sym, _CRYPTO_IDS.get(sym, sym))
+    data = await _tools_get_json("https://api.coingecko.com/api/v3/coins/markets", params={"vs_currency": vs, "ids": coin_id, "price_change_percentage": "24h"}, timeout=14)
+    if not data:
+        raise ValueError(f"Crypto symbol not found: {symbol}")
+    return data[0], coin_id
+
+
+@app.on_message(filters.command(["qeymat"], ".") & filters.me, group=-82)
+async def market_pro_torob(app, m: Message):
+    query = _tools_arg(m)
+    if not query:
+        await _tools_error(m, "Torob Price", "Product name is required", ".qeymat iphone 13")
+        raise StopPropagation
+    await _tools_edit(m, _tools_box("Torob Market", [("Status", "Searching…"), ("Query", query)]))
+    try:
+        result = await _market_torob_search(query)
+        await _market_send_product_result(app, m, "Torob Price Finder", result)
+    except Exception as e:
+        await _tools_error(m, "Torob Price", e, ".qeymat iphone 13")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["price"], ".") & filters.me, group=-82)
+async def market_pro_basalam(app, m: Message):
+    query = _tools_arg(m)
+    if not query:
+        await _tools_error(m, "Basalam Price", "Product name is required", ".price زعفران")
+        raise StopPropagation
+    await _tools_edit(m, _tools_box("Basalam Market", [("Status", "Searching…"), ("Query", query)]))
+    try:
+        result = await _market_basalam_search(query)
+        await _market_send_product_result(app, m, "Basalam Price Finder", result)
+    except Exception as e:
+        await _tools_error(m, "Basalam Price", e, ".price زعفران")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["cryptolist"], ".") & filters.me, group=-82)
+async def market_pro_cryptolist(app, m: Message):
+    rows = [
+        ("Major", "BTC, ETH, USDT, USDC, BNB, XRP, SOL, ADA"),
+        ("Popular", "TRX, TON, DOGE, SHIB, LTC, BCH, LINK, DOT"),
+        ("DeFi/Game", "UNI, AAVE, SAND, MANA, AXS, MATIC, AVAX"),
+        ("Usage", ".crypto btc | .crypto trx | .c 100 usdt toman"),
+    ]
+    await _tools_edit(m, _tools_box("Crypto Symbols List", rows, footer="CoinGecko + Coinbase supported"))
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["crypto"], ".") & filters.me, group=-82)
+async def market_pro_crypto(app, m: Message):
+    symbol = _tools_arg(m).lower().strip()
+    if not symbol:
+        await _tools_error(m, "Crypto Price", "Crypto symbol is required", ".crypto btc")
+        raise StopPropagation
+    await _tools_edit(m, _tools_box("Crypto Market", [("Status", "Fetching…"), ("Symbol", symbol.upper())]))
+    try:
+        item, coin_id = await _market_crypto_market(symbol, "usd")
+        toman_rate = await _crypto_toman_rate(symbol)
+        rows = [
+            ("Name", f"{item.get('name')} ({item.get('symbol', symbol).upper()})"),
+            ("USD", f"${float(item.get('current_price') or 0):,.8g}"),
+            ("Toman", f"{toman_rate:,.0f} تومان"),
+            ("24h Change", f"{float(item.get('price_change_percentage_24h') or 0):+.2f}%"),
+            ("24h High", f"${float(item.get('high_24h') or 0):,.8g}"),
+            ("24h Low", f"${float(item.get('low_24h') or 0):,.8g}"),
+            ("Market Cap", f"${float(item.get('market_cap') or 0):,.0f}"),
+            ("Rank", item.get("market_cap_rank", "—")),
+        ]
+        await _tools_edit(m, _tools_box("Premium Crypto Price", rows, footer="CoinGecko + Coinbase"))
+    except Exception as e:
+        await _tools_error(m, "Crypto Price", e, ".crypto btc")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["trx"], ".") & filters.me, group=-82)
+async def market_pro_trx(app, m: Message):
+    # Dedicated shortcut for TRON
+    try:
+        item, _ = await _market_crypto_market("trx", "usd")
+        toman_rate = await _crypto_toman_rate("trx")
+        rows = [
+            ("Name", "TRON (TRX)"),
+            ("USD", f"${float(item.get('current_price') or 0):,.8g}"),
+            ("Toman", f"{toman_rate:,.0f} تومان"),
+            ("24h Change", f"{float(item.get('price_change_percentage_24h') or 0):+.2f}%"),
+            ("24h High", f"${float(item.get('high_24h') or 0):,.8g}"),
+            ("24h Low", f"${float(item.get('low_24h') or 0):,.8g}"),
+        ]
+        await _tools_edit(m, _tools_box("TRX Live Price", rows, footer="TiTaN Market Pro"))
+    except Exception as e:
+        await _tools_error(m, "TRX Price", e, ".trx")
+    raise StopPropagation
+
+
+def _market_extract_tron_hash(text):
+    text = str(text or "").strip()
+    m = re.search(r"([A-Fa-f0-9]{64})", text)
+    return m.group(1) if m else ""
+
+
+@app.on_message(filters.command(["tara"], ".") & filters.me, group=-82)
+async def market_pro_tara(app, m: Message):
+    raw = _tools_reply_or_arg(m)
+    tx_hash = _market_extract_tron_hash(raw)
+    if not tx_hash:
+        await _tools_error(m, "TRON Transaction", "Valid 64-character transaction hash/link is required", ".tara https://tronscan.org/#/transaction/HASH")
+        raise StopPropagation
+    await _tools_edit(m, _tools_box("TRON Transaction", [("Status", "Fetching…"), ("Hash", tx_hash[:16] + "…")]))
+    try:
+        data = await _tools_get_json("https://apilist.tronscanapi.com/api/transaction-info", params={"hash": tx_hash}, timeout=16)
+        if not data or data.get("message"):
+            raise ValueError(data.get("message", "Transaction not found"))
+        status = data.get("contractRet") or ("SUCCESS" if data.get("confirmed") else "PENDING")
+        timestamp = data.get("timestamp") or data.get("block_ts") or 0
+        date_str = "—"
+        try:
+            date_str = datetime.fromtimestamp(int(timestamp)/1000).strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            pass
+        owner = "—"; to_addr = "—"; amount = "—"; token = "TRX"
+        cdata = data.get("contractData") or {}
+        if cdata:
+            owner = cdata.get("owner_address") or cdata.get("ownerAddress") or "—"
+            to_addr = cdata.get("to_address") or cdata.get("toAddress") or "—"
+            if cdata.get("amount") is not None:
+                amount = f"{float(cdata.get('amount'))/1_000_000:,.6f} TRX"
+        tinfo = data.get("tokenTransferInfo") or data.get("trc20TransferInfo") or {}
+        if isinstance(tinfo, list) and tinfo:
+            tinfo = tinfo[0]
+        if isinstance(tinfo, dict) and tinfo:
+            token = tinfo.get("symbol") or tinfo.get("tokenAbbr") or token
+            owner = tinfo.get("from_address") or tinfo.get("from") or owner
+            to_addr = tinfo.get("to_address") or tinfo.get("to") or to_addr
+            dec = int(tinfo.get("decimals") or tinfo.get("tokenDecimal") or 6)
+            val = tinfo.get("amount_str") or tinfo.get("amount") or tinfo.get("quant")
+            try:
+                amount = f"{float(val)/(10**dec):,.8g} {token}"
+            except Exception:
+                amount = f"{val} {token}"
+        fee = "—"
+        try:
+            fee_sun = (data.get("cost") or {}).get("net_fee_cost") or (data.get("cost") or {}).get("fee") or data.get("fee")
+            if fee_sun is not None:
+                fee = f"{float(fee_sun)/1_000_000:,.6f} TRX"
+        except Exception:
+            pass
+        rows = [
+            ("Status", status),
+            ("Amount", amount),
+            ("From", owner),
+            ("To", to_addr),
+            ("Fee", fee),
+            ("Time", date_str),
+            ("Confirmed", "YES" if data.get("confirmed") else "NO"),
+            ("Hash", tx_hash),
+        ]
+        await _tools_edit(m, _tools_box("Premium TRON Transaction", rows, footer="TronScan API"))
+    except Exception as e:
+        await _tools_error(m, "TRON Transaction", e, ".tara HASH_OR_LINK")
+    raise StopPropagation
+
+# ================= End Market Pro / Iran + Crypto =================
+
+
+# ================= AI Pro / MajidAPI GPT + Voice + Image v7.5 =================
+_AI_PRO_VERSION = "2026-08-22-ai-pro-majidapi-gpt35-v7-5"
+_AI_OLD_TEXT_COMMANDS = ["gpt3", "gpt4", "assist", "bard", "asq", "messi", "leo", "ronaldo", "chris", "ilon", "elon", "elonmusk", "ultra"]
+_AI_VOICES = {
+    "fa-female": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "title": "Persian Female / Dilara"},
+    "fa-male": {"edge": "fa-IR-FaridNeural", "gtts": "fa", "title": "Persian Male / Farid"},
+    "en-female": {"edge": "en-US-JennyNeural", "gtts": "en", "title": "English Female / Jenny"},
+    "en-male": {"edge": "en-US-GuyNeural", "gtts": "en", "title": "English Male / Guy"},
+    "ar-female": {"edge": "ar-SA-ZariyahNeural", "gtts": "ar", "title": "Arabic Female"},
+    "tr-female": {"edge": "tr-TR-EmelNeural", "gtts": "tr", "title": "Turkish Female"},
+}
+
+
+def _ai_data_defaults(data):
+    if not isinstance(data, dict):
+        data = {}
+    data.setdefault("ai_voice", "fa-female")
+    data.setdefault("ai_voice_format", "audio")
+    data.setdefault("ai_engine", "majidapi-gpt-35")
+    data.setdefault("ai_memory", [])
+    data.setdefault("ai_history", [])
+    if not isinstance(data.get("ai_memory"), list):
+        data["ai_memory"] = []
+    if not isinstance(data.get("ai_history"), list):
+        data["ai_history"] = []
+    return data
+
+
+def _ai_save_data(data):
+    data = _ai_data_defaults(data)
+    write("data.json", json.dumps(data, ensure_ascii=False))
+
+
+def _ai_reply_or_arg(message):
+    arg = _tools_arg(message) if "_tools_arg" in globals() else ""
+    if arg:
+        return arg.strip()
+    reply = getattr(message, "reply_to_message", None)
+    if reply:
+        return (getattr(reply, "text", None) or getattr(reply, "caption", None) or "").strip()
+    return ""
+
+
+def _ai_box(title, rows=None, footer="TiTaN AI Pro"):
+    return _tools_box(title, rows or [], footer=footer) if "_tools_box" in globals() else str(rows)
+
+
+async def _ai_edit(message, text):
+    if "_tools_edit" in globals():
+        return await _tools_edit(message, text)
+    try:
+        return await message.edit_text(text)
+    except Exception:
+        return await message.reply_text(text)
+
+
+async def _ai_error(message, title, error, usage=None):
+    if "_tools_error" in globals():
+        return await _tools_error(message, title, error, usage)
+    return await _ai_edit(message, f"{title}\nERROR: {error}\n{usage or ''}")
+
+
+def _ai_env(name, default=""):
+    return str(os.environ.get(name, default)).strip()
+
+
+async def _ai_text_request(prompt, data):
+    """Text AI via MajidAPI GPT-3.5 Turbo with persistent memory.
+
+    MajidAPI endpoint is simple (?q=QUESTION), so memory/history are injected
+    into the question text before sending. No router/proxy config is used.
+    """
+    token = _ai_env("MAJIDAPI_TOKEN", _ai_env("MAJID_API_TOKEN", ""))
+    if not token:
+        raise RuntimeError("MAJIDAPI_TOKEN تنظیم نشده است. توکن MajidAPI را در Railway Variables بگذار.")
+
+    memory = data.get("ai_memory", []) if isinstance(data.get("ai_memory"), list) else []
+    history = data.get("ai_history", []) if isinstance(data.get("ai_history"), list) else []
+    memory_text = "\n".join([f"- {str(x.get('text', x))[:600]}" for x in memory[-50:]])
+    history_text = "\n".join([
+        f"{('کاربر' if x.get('role') == 'user' else 'دستیار')}: {str(x.get('content', ''))[:500]}"
+        for x in history[-10:]
+        if x.get("role") in ["user", "assistant"] and str(x.get("content", "")).strip()
+    ])
+    full_question = (
+        "تو دستیار هوشمند TiTaN Self هستی. پیش‌فرض فارسی، دقیق، مفید و حرفه‌ای جواب بده.\n"
+        "از حافظه زیر به عنوان دانسته‌های پایدار کاربر استفاده کن. اگر چیزی در حافظه نبود، حدس نزن.\n\n"
+        f"[حافظه دائمی]\n{memory_text if memory_text else '- موردی ثبت نشده است.'}\n\n"
+        f"[تاریخچه کوتاه گفتگو]\n{history_text if history_text else '- تاریخچه‌ای نیست.'}\n\n"
+        f"[سؤال جدید کاربر]\n{prompt}"
+    )
+    # Keep URL/query safe and avoid oversized requests.
+    if len(full_question) > 6500:
+        full_question = full_question[-6500:]
+
+    def extract_answer(obj):
+        if isinstance(obj, str):
+            return obj.strip()
+        if isinstance(obj, dict):
+            preferred = ["answer", "message", "result", "text", "response", "content", "reply", "data"]
+            for key in preferred:
+                val = obj.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+                if isinstance(val, dict):
+                    nested = extract_answer(val)
+                    if nested:
+                        return nested
+                if isinstance(val, list):
+                    nested = extract_answer(val)
+                    if nested:
+                        return nested
+            # OpenAI-like fallback
+            try:
+                return obj["choices"][0]["message"]["content"].strip()
+            except Exception:
+                pass
+        if isinstance(obj, list):
+            for item in obj:
+                nested = extract_answer(item)
+                if nested:
+                    return nested
+        return ""
+
+    def run():
+        r = requests.get(
+            "https://api.majidapi.ir/gpt/35",
+            params={"q": full_question, "token": token},
+            headers={"Authorization": f"Bearer {token}", "User-Agent": "TiTaN-Self-AI-Pro/7.5"},
+            timeout=120,
+        )
+        if r.status_code >= 400:
+            raise RuntimeError(f"MajidAPI GPT {r.status_code}: {r.text[:900]}")
+        try:
+            obj = r.json()
+            answer = extract_answer(obj)
+        except Exception:
+            answer = r.text.strip()
+        if not answer:
+            raise RuntimeError(f"MajidAPI پاسخ خالی/نامعتبر داد: {r.text[:500]}")
+        return answer
+
+    answer = await asyncio.to_thread(run)
+    history.append({"role": "user", "content": prompt, "ts": int(time.time())})
+    history.append({"role": "assistant", "content": answer[:2500], "ts": int(time.time())})
+    data["ai_history"] = history[-30:]
+    data["ai_engine"] = "majidapi-gpt-35"
+    return answer, "MajidAPI GPT-3.5 Turbo"
+
+
+async def _ai_show_memory(message, data):
+    mem = data.get("ai_memory", []) if isinstance(data.get("ai_memory"), list) else []
+    if not mem:
+        await _ai_edit(message, _ai_box("AI Memory", [("Status", "Empty"), ("Teach", ".ai learn متن آموزشی")], footer="MajidAPI Memory"))
+        return
+    rows = []
+    for i, item in enumerate(mem[-20:], start=max(1, len(mem)-19)):
+        txt = item.get("text", item) if isinstance(item, dict) else item
+        rows.append((str(i), str(txt)[:120]))
+    await _ai_edit(message, _ai_box("AI Memory", rows, footer=".ai forget N / .ai forget all"))
+
+
+@app.on_message(filters.command(["ai"], ".") & filters.me, group=-90)
+async def ai_pro_text_majidapi(app, m: Message):
+    data = _ai_data_defaults(json_read("data.json"))
+    prompt = _ai_reply_or_arg(m)
+    if not prompt:
+        await _ai_error(m, "MajidAPI AI", "متن سوال خالی است", ".ai سوال شما")
+        raise StopPropagation
+
+    cmd = prompt.strip()
+    low = cmd.lower()
+    try:
+        if low.startswith("learn ") or low.startswith("یاد بگیر "):
+            fact = cmd.split(maxsplit=1)[1].strip()
+            if not fact:
+                raise ValueError("متن آموزشی خالی است")
+            mem = data.get("ai_memory", []) if isinstance(data.get("ai_memory"), list) else []
+            mem.append({"text": fact[:1200], "ts": int(time.time())})
+            data["ai_memory"] = mem[-200:]
+            _ai_save_data(data)
+            await _ai_edit(m, _ai_box("AI Learned", [("Saved", fact[:300]), ("Memory Count", len(data["ai_memory"]))], footer="حافظه دائمی ذخیره شد"))
+            raise StopPropagation
+
+        if low in ["memory", "mem", "حافظه"]:
+            await _ai_show_memory(m, data)
+            raise StopPropagation
+
+        if low.startswith("forget") or low.startswith("فراموش"):
+            parts = cmd.split()
+            mem = data.get("ai_memory", []) if isinstance(data.get("ai_memory"), list) else []
+            if len(parts) >= 2 and parts[1].lower() in ["all", "همه"]:
+                data["ai_memory"] = []
+                _ai_save_data(data)
+                await _ai_edit(m, _ai_box("AI Memory", [("Deleted", "ALL")]))
+                raise StopPropagation
+            if len(parts) >= 2 and parts[1].isdigit():
+                idx = int(parts[1]) - 1
+                if 0 <= idx < len(mem):
+                    removed = mem.pop(idx)
+                    data["ai_memory"] = mem
+                    _ai_save_data(data)
+                    txt = removed.get("text", removed) if isinstance(removed, dict) else removed
+                    await _ai_edit(m, _ai_box("AI Memory", [("Deleted", str(txt)[:300])]))
+                else:
+                    await _ai_error(m, "AI Memory", "شماره حافظه نامعتبر است", ".ai memory")
+                raise StopPropagation
+            await _ai_error(m, "AI Memory", "فرمت حذف اشتباه است", ".ai forget 2 یا .ai forget all")
+            raise StopPropagation
+
+        if low in ["reset", "clear", "ریست"]:
+            data["ai_history"] = []
+            _ai_save_data(data)
+            await _ai_edit(m, _ai_box("AI Chat Reset", [("History", "Cleared"), ("Memory", "Kept")]))
+            raise StopPropagation
+
+    except StopPropagation:
+        raise
+    except Exception as e:
+        await _ai_error(m, "AI Memory", e, ".ai learn متن آموزشی")
+        raise StopPropagation
+
+    await _ai_edit(m, _ai_box("MajidAPI AI", [("Status", "Thinking…"), ("Model", data.get("ai_engine", "majidapi-gpt-35")), ("Prompt", prompt[:180])], footer="MajidAPI GPT-3.5 Turbo"))
+    try:
+        answer, model = await _ai_text_request(prompt, data)
+        _ai_save_data(data)
+        header = _ai_box("MajidAPI AI Response", [("Model", model), ("Memory", len(data.get("ai_memory", []))), ("Prompt", prompt[:140])], footer="TiTaN AI Pro")
+        body = answer[:3300] + ("\n…" if len(answer) > 3300 else "")
+        await _ai_edit(m, f"{header}\n\n<b>Answer:</b>\n{_tools_html(body) if '_tools_html' in globals() else body}")
+    except Exception as e:
+        await _ai_error(m, "MajidAPI AI", e, ".ai سلام")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(_AI_OLD_TEXT_COMMANDS, ".") & filters.me, group=-90)
+async def ai_pro_old_text_disabled(app, m: Message):
+    await _ai_edit(m, _ai_box("AI Text Commands Updated", [
+        ("Old Command", (m.command[0] if getattr(m, "command", None) else "—")),
+        ("New Command", ".ai متن سوال"),
+        ("Engine", "Grok / xAI"),
+    ], footer="دستورهای متنی قدیمی حذف شدند"))
+    raise StopPropagation
+
+
+@app.on_message(filters.regex(r"^(\.\s+|/\s+).+") & filters.me, group=-90)
+async def ai_pro_dot_slash_disabled(app, m: Message):
+    await _ai_edit(m, _ai_box("AI Voice Command Changed", [
+        ("Old", ". متن  /  / متن"),
+        ("Female", ".ttsf متن"),
+        ("Male", ".ttsm متن"),
+        ("Default", ".tts متن"),
+    ], footer="دستورهای نقطه/اسلش برای صوت حذف شدند"))
+    raise StopPropagation
+
+
+async def _ai_tts_generate(text, voice_key):
+    voice_key = voice_key if voice_key in _AI_VOICES else "fa-female"
+    voice = _AI_VOICES[voice_key]
+    os.makedirs("ai_cache", exist_ok=True)
+    safe_id = base64.urlsafe_b64encode(os.urandom(8)).decode("ascii").rstrip("=")
+    out_path = os.path.join("ai_cache", f"tts_{safe_id}.mp3")
+    try:
+        import edge_tts
+        communicate = edge_tts.Communicate(text=text, voice=voice["edge"])
+        await communicate.save(out_path)
+        engine = f"Edge Neural / {voice['edge']}"
+    except Exception as edge_exc:
+        print(f"AI Pro edge-tts fallback to gTTS: {edge_exc}")
+        tts = gTTS(text=text, lang=voice.get("gtts", "fa"))
+        await asyncio.to_thread(tts.save, out_path)
+        engine = f"gTTS fallback / {voice.get('gtts', 'fa')}"
+    return out_path, engine, voice["title"]
+
+
+async def _ai_send_tts(app, m, text, voice_key):
+    if not text:
+        await _ai_error(m, "AI Voice", "متن خالی است", ".tts متن شما")
+        return
+    if len(text) > 1800:
+        text = text[:1800]
+    wait = await _ai_edit(m, _ai_box("AI Voice", [("Status", "Generating…"), ("Voice", voice_key), ("Text", text[:120])], footer="Neural TTS"))
+    path = None
+    try:
+        path, engine, title = await _ai_tts_generate(text, voice_key)
+        caption = _ai_box("Premium AI Voice", [("Voice", title), ("Engine", engine), ("Length", f"{len(text)} chars")], footer="TiTaN AI Pro")
+        await app.send_audio(m.chat.id, path, caption=caption, parse_mode=enums.ParseMode.HTML, reply_to_message_id=m.id, title="ai_voice.mp3", performer="TiTaN AI")
+        try:
+            await wait.delete()
+        except Exception:
+            pass
+    except Exception as e:
+        await _ai_error(m, "AI Voice", e, ".tts سلام دنیا")
+    finally:
+        if path and os.path.isfile(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+
+@app.on_message(filters.command(["tts"], ".") & filters.me, group=-90)
+async def ai_pro_tts_default(app, m: Message):
+    data = _ai_data_defaults(json_read("data.json"))
+    await _ai_send_tts(app, m, _ai_reply_or_arg(m), data.get("ai_voice", "fa-female"))
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["ttsf"], ".") & filters.me, group=-90)
+async def ai_pro_tts_female(app, m: Message):
+    await _ai_send_tts(app, m, _ai_reply_or_arg(m), "fa-female")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["ttsm"], ".") & filters.me, group=-90)
+async def ai_pro_tts_male(app, m: Message):
+    await _ai_send_tts(app, m, _ai_reply_or_arg(m), "fa-male")
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["v", "voice", "crush", "wo", "ma"], ".") & filters.me, group=-90)
+async def ai_pro_tts_aliases(app, m: Message):
+    cmd = (m.command[0].lower() if getattr(m, "command", None) else "v")
+    voice_key = "fa-female"
+    if cmd in ["ma"]:
+        voice_key = "fa-male"
+    elif cmd in ["wo", "voice", "crush"]:
+        voice_key = "fa-female"
+    elif cmd == "v":
+        data = _ai_data_defaults(json_read("data.json"))
+        voice_key = data.get("ai_voice", "fa-female")
+    await _ai_send_tts(app, m, _ai_reply_or_arg(m), voice_key)
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["vl"], ".") & filters.me, group=-90)
+async def ai_pro_voice_list(app, m: Message):
+    rows = [(key, val["title"]) for key, val in _AI_VOICES.items()]
+    rows.append(("Set", ".sv fa-female"))
+    rows.append(("Use", ".tts متن | .ttsf متن | .ttsm متن"))
+    await _ai_edit(m, _ai_box("AI Voice IDs", rows, footer="Edge Neural voices with gTTS fallback"))
+    raise StopPropagation
+
+
+@app.on_message(filters.command(["sv"], ".") & filters.me, group=-90)
+async def ai_pro_set_voice(app, m: Message):
+    mode = _tools_arg(m).strip().lower() if "_tools_arg" in globals() else ""
+    if mode not in _AI_VOICES:
+        await _ai_error(m, "Set AI Voice", f"Voice ID نامعتبر است: {mode}", ".vl سپس .sv fa-female")
+        raise StopPropagation
+    data = _ai_data_defaults(json_read("data.json"))
+    data["ai_voice"] = mode
+    _ai_save_data(data)
+    await _ai_edit(m, _ai_box("AI Voice Saved", [("Default Voice", mode), ("Title", _AI_VOICES[mode]["title"]), ("Use", ".tts متن")]))
+    raise StopPropagation
+
+
+def _ai_extract_inline_image_from_gemini(data):
+    for cand in data.get("candidates", []) or []:
+        content = cand.get("content") or {}
+        for part in content.get("parts", []) or []:
+            inline = part.get("inlineData") or part.get("inline_data") or {}
+            b64 = inline.get("data")
+            mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+            if b64:
+                return base64.b64decode(b64), mime
+    return None, None
+
+
+async def _ai_generate_image(prompt):
+    majid_token = _ai_env("MAJIDAPI_TOKEN", _ai_env("MAJID_API_TOKEN", ""))
+    if majid_token:
+        def run_majid():
+            r = requests.get(
+                "https://api.majidapi.ir/ai/image",
+                params={"prompt": prompt, "token": majid_token},
+                headers={"Authorization": f"Bearer {majid_token}"},
+                timeout=120,
+            )
+            if r.status_code >= 400:
+                raise RuntimeError(f"MajidAPI Image {r.status_code}: {r.text[:700]}")
+            ctype = r.headers.get("content-type", "")
+            if "image" in ctype.lower():
+                return r.content, "image/png", "MajidAPI Image"
+            try:
+                data = r.json()
+            except Exception:
+                txt = r.text.strip()
+                if txt.startswith("http"):
+                    data = {"url": txt}
+                else:
+                    raise RuntimeError(f"MajidAPI پاسخ نامعتبر داد: {txt[:300]}")
+            # Flexible JSON URL extraction
+            candidates = []
+            def walk(x):
+                if isinstance(x, str) and x.startswith("http"):
+                    candidates.append(x)
+                elif isinstance(x, dict):
+                    for v in x.values(): walk(v)
+                elif isinstance(x, list):
+                    for v in x: walk(v)
+            walk(data)
+            if not candidates:
+                raise RuntimeError("MajidAPI لینک/تصویر برنگرداند")
+            img_url = candidates[0]
+            rr = requests.get(img_url, timeout=90)
+            rr.raise_for_status()
+            return rr.content, rr.headers.get("content-type", "image/png"), "MajidAPI Image"
+        return await asyncio.to_thread(run_majid)
+
+    # Optional official fallbacks if user later sets keys
+    gemini_key = _ai_env("GEMINI_API_KEY", _ai_env("GOOGLE_API_KEY", ""))
+    if gemini_key:
+        model = _ai_env("GEMINI_IMAGE_MODEL", _ai_env("NANO_BANANA_MODEL", "gemini-2.5-flash-image-preview"))
+        payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}}
+        def run_gemini():
+            r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", params={"key": gemini_key}, json=payload, timeout=90)
+            if r.status_code >= 400:
+                raise RuntimeError(f"Gemini Image API {r.status_code}: {r.text[:700]}")
+            return r.json()
+        data = await asyncio.to_thread(run_gemini)
+        img, mime = _ai_extract_inline_image_from_gemini(data)
+        if img:
+            return img, mime or "image/png", f"Gemini / {model}"
+        raise RuntimeError("Gemini پاسخ تصویری برنگرداند.")
+
+    # Free no-key fallback
+    def run_pollinations():
+        url = "https://image.pollinations.ai/prompt/" + urllib.parse.quote(prompt)
+        rr = requests.get(url, params={"width": 1024, "height": 1024, "nologo": "true"}, timeout=120)
+        rr.raise_for_status()
+        return rr.content, rr.headers.get("content-type", "image/jpeg"), "Pollinations Free Image"
+    return await asyncio.to_thread(run_pollinations)
+
+
+@app.on_message(filters.command(["pgpt"], ".") & filters.me, group=-90)
+async def ai_pro_image(app, m: Message):
+    prompt = _ai_reply_or_arg(m)
+    if not prompt:
+        await _ai_error(m, "AI Image", "پرامپت خالی است", ".pgpt یک شهر آینده‌نگر در شب")
+        raise StopPropagation
+    wait = await _ai_edit(m, _ai_box("AI Image Studio", [("Status", "Generating…"), ("Prompt", prompt[:160])], footer="Gemini / OpenAI Image"))
+    os.makedirs("ai_cache", exist_ok=True)
+    path = os.path.join("ai_cache", "ai_image_" + base64.urlsafe_b64encode(os.urandom(8)).decode("ascii").rstrip("=") + ".png")
+    try:
+        img_bytes, mime, engine = await _ai_generate_image(prompt)
+        with open(path, "wb") as f:
+            f.write(img_bytes)
+        caption = _ai_box("Premium AI Image", [("Engine", engine), ("Prompt", prompt[:300])], footer="TiTaN AI Pro")
+        await app.send_photo(m.chat.id, path, caption=caption[:1024], parse_mode=enums.ParseMode.HTML, reply_to_message_id=m.id)
+        try:
+            await wait.delete()
+        except Exception:
+            pass
+    except Exception as e:
+        await _ai_error(m, "AI Image", e, ".pgpt cyberpunk cat in Tehran")
+    finally:
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+    raise StopPropagation
+
+
+
+async def _ai_upload_temp_file(path):
+    def run():
+        with open(path, "rb") as f:
+            r = requests.post("https://tmpfiles.org/api/v1/upload", files={"file": f}, timeout=45)
+        r.raise_for_status()
+        data = r.json()
+        url = ((data.get("data") or {}).get("url") or "").strip()
+        if not url:
+            raise RuntimeError("tmpfiles upload failed")
+        # Convert page URL to direct download URL.
+        return url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
+    return await asyncio.to_thread(run)
+
+
+_AI_SPEAKERS = {
+    "ataran": "Ataran", "leyla": "Leyla.Hatami", "peyman": "Peyman.Yousefi", "javad": "Javad.Ezzati",
+    "hayayi": "Hayayi", "hootan": "Hootan.Shakiba", "adel": "Adel", "mohammadzadeh": "Mohammadzadeh",
+    "izadyar": "Izadyar", "shahab": "Shahab.Hosseini", "yegane": "Mohsen.Yeghane", "chavoshi": "Chavoshi",
+    "abdi": "Akbar.Abdi", "nouraei": "Part.Speaker.Nouraei", "kiani": "Part.Speaker.Kiani", "pune": "Part.Speaker.Pune", "bahar": "Part.Speaker.Bahar",
+}
+
+
+@app.on_message(filters.command(["vc", "voicechange"], ".") & filters.me, group=-90)
+async def ai_pro_voice_changer(app, m: Message):
+    speaker_arg = (_tools_arg(m) if "_tools_arg" in globals() else "").strip()
+    if speaker_arg.lower() in ["list", "لیست"]:
+        rows = [(k, v) for k, v in _AI_SPEAKERS.items()]
+        await _ai_edit(m, _ai_box("MajidAPI Voice Changer Speakers", rows, footer="Use: .vc ataran as reply to voice"))
+        raise StopPropagation
+    speaker = _AI_SPEAKERS.get(speaker_arg.lower(), speaker_arg or "Ataran")
+    reply = getattr(m, "reply_to_message", None)
+    if not reply or not (getattr(reply, "voice", None) or getattr(reply, "audio", None) or getattr(reply, "video_note", None)):
+        await _ai_error(m, "Voice Changer", "روی ویس/صدا ریپلای کن", ".vc ataran یا .vc list")
+        raise StopPropagation
+    token = _ai_env("MAJIDAPI_TOKEN", _ai_env("MAJID_API_TOKEN", ""))
+    if not token:
+        await _ai_error(m, "Voice Changer", "MAJIDAPI_TOKEN تنظیم نشده است", "Railway Variables: MAJIDAPI_TOKEN")
+        raise StopPropagation
+    wait = await _ai_edit(m, _ai_box("Voice Changer", [("Status", "Downloading voice…"), ("Speaker", speaker)], footer="MajidAPI"))
+    local = None
+    out_path = None
+    try:
+        os.makedirs("ai_cache", exist_ok=True)
+        local = await app.download_media(reply, file_name="ai_cache/source_voice")
+        voice_url = await _ai_upload_temp_file(local)
+        await _ai_edit(wait or m, _ai_box("Voice Changer", [("Status", "Processing…"), ("Speaker", speaker)], footer="MajidAPI"))
+        def run_api():
+            r = requests.get(
+                "https://api.majidapi.ir/ai/voice-changer",
+                params={"voice": voice_url, "speaker": speaker, "token": token},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=180,
+            )
+            if r.status_code >= 400:
+                raise RuntimeError(f"MajidAPI Voice {r.status_code}: {r.text[:700]}")
+            ctype = r.headers.get("content-type", "")
+            if "audio" in ctype.lower() or "octet" in ctype.lower():
+                return r.content, ctype, "binary"
+            try:
+                data = r.json()
+            except Exception:
+                txt = r.text.strip()
+                if txt.startswith("http"):
+                    data = {"url": txt}
+                else:
+                    raise RuntimeError(f"MajidAPI پاسخ نامعتبر داد: {txt[:300]}")
+            candidates = []
+            def walk(x):
+                if isinstance(x, str) and x.startswith("http"):
+                    candidates.append(x)
+                elif isinstance(x, dict):
+                    for v in x.values(): walk(v)
+                elif isinstance(x, list):
+                    for v in x: walk(v)
+            walk(data)
+            if not candidates:
+                raise RuntimeError("MajidAPI لینک صوت خروجی برنگرداند")
+            rr = requests.get(candidates[0], timeout=120)
+            rr.raise_for_status()
+            return rr.content, rr.headers.get("content-type", "audio/mpeg"), candidates[0]
+        audio_bytes, ctype, src = await asyncio.to_thread(run_api)
+        out_path = os.path.join("ai_cache", "changed_voice_" + base64.urlsafe_b64encode(os.urandom(6)).decode("ascii").rstrip("=") + ".mp3")
+        with open(out_path, "wb") as f:
+            f.write(audio_bytes)
+        caption = _ai_box("Premium Voice Changed", [("Speaker", speaker), ("Engine", "MajidAPI"), ("Source", str(src)[:80])], footer="TiTaN AI Pro")
+        await app.send_audio(m.chat.id, out_path, caption=caption, parse_mode=enums.ParseMode.HTML, reply_to_message_id=m.id, title="changed_voice.mp3", performer="TiTaN AI")
+        try:
+            await wait.delete()
+        except Exception:
+            pass
+    except Exception as e:
+        await _ai_error(m, "Voice Changer", e, ".vc ataran")
+    finally:
+        for fp in [local, out_path]:
+            if fp and os.path.isfile(fp):
+                try: os.remove(fp)
+                except Exception: pass
+    raise StopPropagation
+
+# ================= End AI Pro / MajidAPI GPT + Voice + Image =================
 
 def mak():
  with app:
