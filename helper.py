@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-18-dedicated-join-helper-clean-v5-1-panel-pagination-fix"
+FIX_VERSION = "2026-08-22-ai-pro-majidapi-help-v7-5"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -1803,49 +1803,63 @@ eg: .error 404
 
 fahelp21 = """
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-                                                   **[ هوش مصنوعی ]**
+                                                   **[ هوش مصنوعی Pro ]**
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-**هوش مصنوعی متنی**
-
-➤ [ `.gpt3` ] **⤳** (TEXT)
+**هوش مصنوعی متنی - فقط یک دستور**
+موتور: MajidAPI GPT 3.5 Turbo
+➤ [ `.ai` ] **⤳** (TEXT)
+مثال:
+➤ `.ai یک متن تبلیغاتی حرفه‌ای بنویس`
 ———————————————
-➤ [ `.gpt4` ] **⤳** (TEXT)
+**حافظه و یادگیری AI**
+آموزش دادن به هوش مصنوعی
+➤ [ `.ai learn` ] **⤳** (TEXT)
+مثال:
+➤ `.ai learn اسم کانال من TiTaN است`
 ———————————————
-➤ [ `.bard` ] **⤳** (TEXT)
+دیدن حافظه
+➤ [ `.ai memory` ]
 ———————————————
-➤ [ `.asq` ] **⤳** (TEXT)
+حذف یک حافظه
+➤ [ `.ai forget 2` ]
 ———————————————
-➤ [ `.messi` ] **⤳** (TEXT)
+حذف کل حافظه
+➤ [ `.ai forget all` ]
 ———————————————
-➤ [ `.ronaldo` ] **⤳** (TEXT)
-———————————————
-➤ [ `.ilon` ] **⤳** (TEXT)
+پاک کردن تاریخچه چت، بدون حذف حافظه
+➤ [ `.ai reset` ]
 ———————————————
 **هوش مصنوعی صوتی**
-
-➤ [ `.` ] **⤳** (TEXT) زن
+تبدیل متن به صوت با صدای پیش‌فرض
+➤ [ `.tts` ] **⤳** (TEXT)
 ———————————————
-➤ [ `/` ] **⤳** (TEXT) مرد
+صدای زن فارسی
+➤ [ `.ttsf` ] **⤳** (TEXT)
 ———————————————
-➤ [ `.voice` ] **⤳** (TEXT)
+صدای مرد فارسی
+➤ [ `.ttsm` ] **⤳** (TEXT)
 ———————————————
-➤ [ `.crush` ] **⤳** (TEXT)
+تغییر صدای ویس با MajidAPI
+➤ [ `.vc` ] **⤳** (Speaker) (Reply Voice)
+مثال:
+➤ `.vc ataran`
+➤ `.vc list`
 ———————————————
-➤ [ `.wo` ] **⤳** (TEXT) زن
-———————————————
-➤ [ `.ma` ] **⤳** (TEXT) مرد
-———————————————
-➤ [ `.v` ] **⤳** (TEXT)
-———————————————
-دریافت لیست آیدی ها
+لیست صداهای TTS
 ➤ [ `.vl` ]
 ———————————————
-تنظیم لهجه مورد نظر با آیدی
-➤ [ `.sv` ] **⤳** (Mode)
+تنظیم صدای پیش‌فرض
+➤ [ `.sv` ] **⤳** (Voice ID)
+مثال: `.sv fa-female`
 ———————————————
 **هوش مصنوعی تصویری**
-
+ساخت عکس با MajidAPI
 ➤ [ `.pgpt` ] **⤳** (TEXT)
+مثال:
+➤ `.pgpt گربه سایبرپانک در تهران بارانی`
+———————————————
+**Variable لازم**
+`MAJIDAPI_TOKEN`
 ———————————————
 """
 
@@ -3021,49 +3035,63 @@ Create Gif
 
 enhelp21 = """
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-**[ AI ]**
+**[ AI Pro ]**
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-**Textual AI**
-
-➤ [ `.gpt3` ] **⤳** (TEXT)
+**Text AI - single command**
+Engine: MajidAPI GPT 3.5 Turbo
+➤ [ `.ai` ] **⤳** (TEXT)
+Example:
+➤ `.ai Write a premium channel bio`
 ———————————————
-➤ [ `.gpt4` ] **⤳** (TEXT)
+**AI Memory / Learning**
+Teach the AI
+➤ [ `.ai learn` ] **⤳** (TEXT)
+Example:
+➤ `.ai learn My channel name is TiTaN`
 ———————————————
-➤ [ `.bard` ] **⤳** (TEXT)
+Show memory
+➤ [ `.ai memory` ]
 ———————————————
-➤ [ `.asq` ] **⤳** (TEXT)
+Forget one memory
+➤ [ `.ai forget 2` ]
 ———————————————
-➤ [ `.messi` ] **⤳** (TEXT)
+Clear all memory
+➤ [ `.ai forget all` ]
 ———————————————
-➤ [ `.ronaldo` ] **⤳** (TEXT)
+Reset chat history, keep memory
+➤ [ `.ai reset` ]
 ———————————————
-➤ [ `.ilon` ] **⤳** (TEXT)
+**AI Voice**
+Text-to-speech default voice
+➤ [ `.tts` ] **⤳** (TEXT)
 ———————————————
-**Audio AI**
-
-➤ [ `.` ] **⤳** (TEXT) Women
+Persian female voice
+➤ [ `.ttsf` ] **⤳** (TEXT)
 ———————————————
-➤ [ `/` ] **⤳** (TEXT) Man
+Persian male voice
+➤ [ `.ttsm` ] **⤳** (TEXT)
 ———————————————
-➤ [ `.voice` ] **⤳** (TEXT)
+Voice changer with MajidAPI
+➤ [ `.vc` ] **⤳** (Speaker) (Reply Voice)
+Example:
+➤ `.vc ataran`
+➤ `.vc list`
 ———————————————
-➤ [ `.crush` ] **⤳** (TEXT)
-———————————————
-➤ [ `.wo` ] **⤳** (TEXT) Women
-———————————————
-➤ [ `.ma` ] **⤳** (TEXT) Man
-———————————————
-➤ [ `.v` ] **⤳** (TEXT)
-———————————————
-Get ID list
+Voice IDs
 ➤ [ `.vl` ]
 ———————————————
-Set desired accent with ID
-➤ [ `.sv` ] **⤳** (Mode)
+Set default voice
+➤ [ `.sv` ] **⤳** (Voice ID)
+Example: `.sv fa-female`
 ———————————————
-**Visual AI**
-
+**AI Image**
+Generate image with MajidAPI
 ➤ [ `.pgpt` ] **⤳** (TEXT)
+Example:
+➤ `.pgpt cyberpunk cat in rainy Tehran`
+———————————————
+**Required Variable**
+`MAJIDAPI_TOKEN`
 ———————————————
 """
 
