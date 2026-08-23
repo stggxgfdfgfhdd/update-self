@@ -1557,6 +1557,63 @@ def _ai_reply_or_arg(message):
     return ""
 
 
+def _ai_get_replied_content(message):
+    reply = getattr(message, "reply_to_message", None)
+    if not reply:
+        return ""
+    text = (getattr(reply, "text", None) or getattr(reply, "caption", None) or "").strip()
+    if not text:
+        # Minimal media awareness; we do not download media for text AI.
+        if getattr(reply, "photo", None):
+            text = "[پیام ریپلای‌شده شامل عکس است اما متن/caption ندارد]"
+        elif getattr(reply, "voice", None):
+            text = "[پیام ریپلای‌شده شامل ویس است؛ برای تحلیل صوت ابتدا آن را به متن تبدیل کن]"
+        elif getattr(reply, "audio", None):
+            text = "[پیام ریپلای‌شده شامل فایل صوتی است اما متن ندارد]"
+        elif getattr(reply, "document", None):
+            text = "[پیام ریپلای‌شده شامل فایل است اما متن ندارد]"
+    sender = getattr(reply, "from_user", None)
+    sender_name = ""
+    try:
+        if sender:
+            sender_name = (getattr(sender, "first_name", "") or "")
+            if getattr(sender, "last_name", None):
+                sender_name += " " + sender.last_name
+            if getattr(sender, "username", None):
+                sender_name += f" (@{sender.username})"
+    except Exception:
+        sender_name = ""
+    if sender_name:
+        return f"فرستنده: {sender_name}\nمتن پیام:\n{text}".strip()
+    return text
+
+
+def _ai_is_management_prompt(arg):
+    low = str(arg or "").strip().lower()
+    if not low:
+        return False
+    return (
+        low.startswith("learn ") or low.startswith("یاد بگیر ") or
+        low in ["memory", "mem", "حافظه", "reset", "clear", "ریست", "help", "راهنما", "personas", "persona list", "شخصیت ها", "شخصیت‌ها"] or
+        low.startswith("forget") or low.startswith("فراموش") or
+        low.startswith("persona ") or low.startswith("شخصیت ")
+    )
+
+
+def _ai_prompt_from_message(message):
+    arg = (_tools_arg(message) if "_tools_arg" in globals() else "").strip()
+    replied = _ai_get_replied_content(message)
+    if replied and not _ai_is_management_prompt(arg):
+        instruction = arg or "این پیام ریپلای‌شده را بررسی کن و پاسخ مناسب، دقیق و مرتب بده."
+        return (
+            f"{instruction}\n\n"
+            "[پیام ریپلای‌شده برای بررسی]\n"
+            f"{replied}\n\n"
+            "لطفاً پاسخ را بر اساس پیام ریپلای‌شده بده، نه فقط متن دستور من."
+        ).strip()
+    return arg or replied
+
+
 def _ai_box(title, rows=None, footer="TiTaN AI Pro"):
     return _tools_box(title, rows or [], footer=footer) if "_tools_box" in globals() else str(rows)
 
@@ -1690,9 +1747,51 @@ def _ai_parse_request(raw_prompt, data):
     return {"prompt": prompt, "persona": persona, "mode": mode, "route": route, "model": model}
 
 
+def _ai_format_answer_html(answer, limit=2800):
+    raw = str(answer or "").strip()
+    if len(raw) > limit:
+        raw = raw[:limit].rstrip() + "\n…"
+
+    # Convert fenced code blocks to Telegram HTML <pre> blocks.
+    parts = []
+    pos = 0
+    pattern = re.compile(r"```([a-zA-Z0-9_+\-.]*)\n?(.*?)```", re.S)
+
+    def fmt_text(txt):
+        txt = str(txt or "")
+        txt = re.sub(r"^#{1,6}\s*", "", txt, flags=re.M)
+        txt = txt.replace("•", "•")
+        esc = html.escape(txt)
+        # Simple markdown cleanup after escaping.
+        esc = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc, flags=re.S)
+        esc = re.sub(r"`([^`\n]{1,120})`", r"<code>\1</code>", esc)
+        return esc.strip()
+
+    for m in pattern.finditer(raw):
+        before = raw[pos:m.start()]
+        if before.strip():
+            parts.append(fmt_text(before))
+        lang = (m.group(1) or "").strip()
+        code = m.group(2) or ""
+        if len(code) > 1500:
+            code = code[:1500].rstrip() + "\n…"
+        code_esc = html.escape(code.strip())
+        if lang:
+            parts.append(f"<b>Code ({html.escape(lang)}):</b>\n<pre>{code_esc}</pre>")
+        else:
+            parts.append(f"<b>Code:</b>\n<pre>{code_esc}</pre>")
+        pos = m.end()
+    tail = raw[pos:]
+    if tail.strip():
+        parts.append(fmt_text(tail))
+    if not parts:
+        return html.escape(raw)
+    return "\n\n".join(parts).strip()
+
+
 def _ai_minimal_card(question, answer, meta):
-    q = _ai_html(question[:700])
-    a = _ai_html(answer[:3600] + ("\n…" if len(answer) > 3600 else ""))
+    q = _ai_html(question[:650] + ("…" if len(str(question)) > 650 else ""))
+    a = _ai_format_answer_html(answer, limit=2850)
     elapsed = meta.get("elapsed", 0)
     route = _ai_html(meta.get("route", "auto"))
     mode = _ai_html(meta.get("mode", "auto"))
@@ -1913,7 +2012,7 @@ async def _ai_show_memory(message, data):
 @app.on_message(filters.command(["ai"], ".") & filters.me, group=-90)
 async def ai_pro_text_majidapi(app, m: Message):
     data = _ai_data_defaults(json_read("data.json"))
-    prompt = _ai_reply_or_arg(m)
+    prompt = _ai_prompt_from_message(m)
     if not prompt:
         await _ai_error(m, "9Router AI", "متن سوال خالی است", ".ai سوال شما")
         raise StopPropagation
