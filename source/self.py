@@ -1580,8 +1580,9 @@ def _ai_env(name, default=""):
 async def _ai_text_request(prompt, data):
     """Text AI via 9Router OpenAI-compatible /chat/completions.
 
-    Conversation memory/history are preserved exactly by injecting them into the
-    system prompt before sending the request.
+    Conversation memory/history are preserved by injecting them into the system
+    prompt. 9Router may return normal JSON, concatenated JSON, or SSE chunks;
+    the response parser below handles all of them.
     """
     api_key = _ai_env("NINEROUTER_API_KEY", "")
     if not api_key:
@@ -1613,24 +1614,116 @@ async def _ai_text_request(prompt, data):
         "messages": messages,
         "temperature": float(_ai_env("NINEROUTER_TEMPERATURE", "0.7") or 0.7),
         "max_tokens": int(_ai_env("NINEROUTER_MAX_TOKENS", "1800") or 1800),
+        "stream": False,
     }
+
+    def _extract_answer_from_obj(obj):
+        if isinstance(obj, str):
+            return obj.strip()
+        if isinstance(obj, dict):
+            # Standard OpenAI response
+            try:
+                msg = obj["choices"][0].get("message") or {}
+                content = msg.get("content")
+                if isinstance(content, str) and content.strip():
+                    return content.strip()
+            except Exception:
+                pass
+            # Streaming chunk response
+            try:
+                delta = obj["choices"][0].get("delta") or {}
+                content = delta.get("content")
+                if isinstance(content, str) and content.strip():
+                    return content
+            except Exception:
+                pass
+            # Common non-standard wrappers
+            for key in ["answer", "message", "result", "text", "response", "content", "reply", "data"]:
+                val = obj.get(key)
+                nested = _extract_answer_from_obj(val)
+                if nested:
+                    return nested
+        if isinstance(obj, list):
+            parts = []
+            for item in obj:
+                nested = _extract_answer_from_obj(item)
+                if nested:
+                    parts.append(nested)
+            return "".join(parts).strip()
+        return ""
+
+    def _parse_9router_response(raw_text):
+        raw = str(raw_text or "").strip()
+        if not raw:
+            return ""
+
+        # SSE format: data: {...}\n\ndata: [DONE]
+        if "data:" in raw:
+            chunks = []
+            for line in raw.splitlines():
+                line = line.strip()
+                if not line.startswith("data:"):
+                    continue
+                payload_line = line[5:].strip()
+                if not payload_line or payload_line == "[DONE]":
+                    continue
+                try:
+                    chunks.append(json.loads(payload_line))
+                except Exception:
+                    if payload_line and not payload_line.startswith("{"):
+                        chunks.append(payload_line)
+            answer = "".join([_extract_answer_from_obj(x) for x in chunks]).strip()
+            if answer:
+                return answer
+
+        # Normal JSON
+        try:
+            return _extract_answer_from_obj(json.loads(raw))
+        except json.JSONDecodeError:
+            pass
+
+        # Concatenated JSON objects: {...}{...} or {...}\n{...}
+        decoder = json.JSONDecoder()
+        idx = 0
+        objects = []
+        while idx < len(raw):
+            while idx < len(raw) and raw[idx].isspace():
+                idx += 1
+            if idx >= len(raw):
+                break
+            try:
+                obj, next_idx = decoder.raw_decode(raw, idx)
+                objects.append(obj)
+                idx = next_idx
+            except json.JSONDecodeError:
+                idx += 1
+        if objects:
+            # For true streaming chunks, concatenate deltas; otherwise first full answer wins.
+            delta_answer = "".join([_extract_answer_from_obj(x) for x in objects]).strip()
+            if delta_answer:
+                return delta_answer
+
+        # Last fallback: if it is plain text, show it instead of crashing.
+        if not raw.startswith("<"):
+            return raw[:4000].strip()
+        return ""
 
     def run():
         r = requests.post(
             base_url + "/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream, text/plain, */*",
+            },
             json=payload,
             timeout=120,
         )
         if r.status_code >= 400:
             raise RuntimeError(f"9Router API {r.status_code}: {r.text[:900]}")
-        obj = r.json()
-        try:
-            answer = obj["choices"][0]["message"]["content"].strip()
-        except Exception:
-            answer = ""
+        answer = _parse_9router_response(r.text)
         if not answer:
-            raise RuntimeError(f"9Router پاسخ خالی/نامعتبر داد: {str(obj)[:500]}")
+            raise RuntimeError(f"9Router پاسخ خالی/نامعتبر داد: {r.text[:700]}")
         return answer
 
     answer = await asyncio.to_thread(run)
