@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-22-ai-pro-majidapi-gpt35-v7-5"
+FIX_VERSION = "2026-08-23-ai-router-persona-v7-6"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -1529,13 +1529,16 @@ def _ai_data_defaults(data):
         data = {}
     data.setdefault("ai_voice", "fa-female")
     data.setdefault("ai_voice_format", "audio")
-    data.setdefault("ai_engine", "my")
+    data.setdefault("ai_engine", _ai_env("NINEROUTER_MODEL", "my") if "_ai_env" in globals() else "my")
+    data.setdefault("ai_persona", _ai_env("AI_DEFAULT_PERSONA", "professional") if "_ai_env" in globals() else "professional")
     data.setdefault("ai_memory", [])
     data.setdefault("ai_history", [])
     if not isinstance(data.get("ai_memory"), list):
         data["ai_memory"] = []
     if not isinstance(data.get("ai_history"), list):
         data["ai_history"] = []
+    if str(data.get("ai_persona", "")).lower() not in ["developer", "teacher", "friendly", "professional"]:
+        data["ai_persona"] = "professional"
     return data
 
 
@@ -1577,19 +1580,177 @@ def _ai_env(name, default=""):
     return str(os.environ.get(name, default)).strip()
 
 
-async def _ai_text_request(prompt, data):
+def _ai_html(value):
+    return html.escape(str(value if value is not None else ""))
+
+
+_AI_PERSONAS = {
+    "developer": "مثل یک توسعه‌دهنده ارشد پاسخ بده: دقیق، فنی، مرحله‌ای، با مثال کد در صورت نیاز و بدون حاشیه.",
+    "teacher": "مثل یک معلم صبور پاسخ بده: ساده، آموزشی، با مثال‌های قابل فهم و توضیح مفاهیم پایه.",
+    "friendly": "با لحن دوستانه، روان و صمیمی پاسخ بده؛ اما همچنان دقیق و مفید باش.",
+    "professional": "با لحن حرفه‌ای، خلاصه، منظم و قابل استفاده پاسخ بده.",
+}
+
+_AI_MODES = {
+    "auto": "نوع درخواست را تشخیص بده و مناسب‌ترین ساختار پاسخ را انتخاب کن.",
+    "explain": "موضوع را روشن، مرحله‌ای و قابل فهم توضیح بده. اگر تفاوت یا مقایسه وجود دارد، جدول یا بولت کوتاه بده.",
+    "code": "روی کدنویسی تمرکز کن. راه‌حل عملی، کد تمیز، نکات خطا و در صورت نیاز نمونه ارائه بده.",
+    "translate": "متن را ترجمه کن. اگر زبان مقصد مشخص نیست، به فارسی روان ترجمه کن و معنی دقیق را حفظ کن.",
+    "summarize": "خلاصه‌ای دقیق، کوتاه و منظم بده. نکات کلیدی را بولت کن.",
+    "fix": "مشکل/خطا را عیب‌یابی کن، علت‌های محتمل و راه‌حل عملی بده. اگر کد هست، نسخه اصلاح‌شده را پیشنهاد کن.",
+    "better": "درخواست کاربر را بهتر بفهم، ابهام‌ها را کم کن و پاسخی دقیق‌تر، کامل‌تر و واضح‌تر بده؛ اما بی‌دلیل طولانی نکن.",
+}
+
+
+def _ai_route_model(route):
+    base = _ai_env("NINEROUTER_MODEL", "my") or "my"
+    return {
+        "fast": _ai_env("NINEROUTER_FAST_MODEL", base) or base,
+        "smart": _ai_env("NINEROUTER_SMART_MODEL", base) or base,
+        "code": _ai_env("NINEROUTER_CODE_MODEL", base) or base,
+    }.get(route, base)
+
+
+def _ai_autodetect_mode_route(prompt):
+    text = str(prompt or "").lower()
+    if any(x in text for x in ["```", "traceback", "syntaxerror", "exception", "error", "bug", "fix", "کد", "ارور", "خطا", "باگ"]):
+        return "fix", "code"
+    if any(x in text for x in ["translate", "ترجمه", "معنی کن", "به انگلیسی", "به فارسی"]):
+        return "translate", "smart"
+    if any(x in text for x in ["summarize", "summary", "خلاصه", "جمع بندی", "جمع‌بندی"]):
+        return "summarize", "fast"
+    if any(x in text for x in ["code", "function", "class", "api", "python", "javascript", "html", "css", "برنامه", "تابع"]):
+        return "code", "code"
+    if any(x in text for x in ["توضیح", "چیست", "چیه", "فرق", "تفاوت", "چرا", "how", "what", "why"]):
+        return "explain", "smart"
+    return "auto", "smart"
+
+
+def _ai_parse_request(raw_prompt, data):
+    prompt = str(raw_prompt or "").strip()
+    persona = str(data.get("ai_persona", "professional") or "professional").lower()
+    mode = "auto"
+    route = "auto"
+
+    # Slash route/model commands: .ai /fast text, .ai /smart text, .ai /code text
+    slash_routes = {"/fast": "fast", "/smart": "smart", "/code": "code"}
+    for prefix, value in slash_routes.items():
+        if prompt.lower().startswith(prefix + " "):
+            route = value
+            prompt = prompt[len(prefix):].strip()
+            break
+
+    # Slash mode commands
+    slash_modes = ["explain", "code", "translate", "summarize", "fix", "better"]
+    for m in slash_modes:
+        prefix = "/" + m
+        if prompt.lower().startswith(prefix + " "):
+            mode = m
+            prompt = prompt[len(prefix):].strip()
+            if route == "auto":
+                route = "code" if m in ["code", "fix"] else ("fast" if m == "summarize" else "smart")
+            break
+
+    # Persian route format
+    persian_routes = [
+        ("مدل سریع:", "fast"), ("مدل سریع :", "fast"),
+        ("مدل دقیق:", "smart"), ("مدل دقیق :", "smart"),
+        ("مدل کدنویسی:", "code"), ("مدل کدنویسی :", "code"),
+    ]
+    for prefix, value in persian_routes:
+        if prompt.startswith(prefix):
+            route = value
+            prompt = prompt[len(prefix):].strip()
+            break
+
+    # Persian/English mode format: explain: text / توضیح: متن
+    mode_prefixes = [
+        ("explain:", "explain"), ("code:", "code"), ("translate:", "translate"),
+        ("summarize:", "summarize"), ("fix:", "fix"), ("better:", "better"),
+        ("توضیح:", "explain"), ("کدنویسی:", "code"), ("ترجمه:", "translate"),
+        ("خلاصه:", "summarize"), ("اصلاح:", "fix"), ("بهتر:", "better"),
+    ]
+    low = prompt.lower()
+    for prefix, value in mode_prefixes:
+        if low.startswith(prefix.lower()):
+            mode = value
+            prompt = prompt[len(prefix):].strip()
+            if route == "auto":
+                route = "code" if value in ["code", "fix"] else ("fast" if value == "summarize" else "smart")
+            break
+
+    if mode == "auto" or route == "auto":
+        detected_mode, detected_route = _ai_autodetect_mode_route(prompt)
+        if mode == "auto":
+            mode = detected_mode
+        if route == "auto":
+            route = detected_route
+
+    model = _ai_route_model(route)
+    return {"prompt": prompt, "persona": persona, "mode": mode, "route": route, "model": model}
+
+
+def _ai_minimal_card(question, answer, meta):
+    q = _ai_html(question[:700])
+    a = _ai_html(answer[:3600] + ("\n…" if len(answer) > 3600 else ""))
+    elapsed = meta.get("elapsed", 0)
+    route = _ai_html(meta.get("route", "auto"))
+    mode = _ai_html(meta.get("mode", "auto"))
+    persona = _ai_html(meta.get("persona", "professional"))
+    model = _ai_html(meta.get("model", "my"))
+    return (
+        "╭─────────────────────╮\n"
+        "│ 🤖 <b>AI Assistant</b>\n"
+        "╰─────────────────────╯\n"
+        "💬 <b>سؤال شما</b>\n"
+        f"{q}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🧠 <b>پاسخ</b>\n"
+        f"{a}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡ TiTaN SelfSaz\n⏱ {elapsed:.1f}s • {mode}/{route} • {persona}\n"
+        f"<code>{model}</code>"
+    )
+
+
+def _ai_inline_buttons():
+    try:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("⚡ Fast", callback_data="ai_hint_fast"), InlineKeyboardButton("🧠 Smart", callback_data="ai_hint_smart"), InlineKeyboardButton("💻 Code", callback_data="ai_hint_code")],
+            [InlineKeyboardButton("✨ Better", callback_data="ai_hint_better"), InlineKeyboardButton("🎭 Persona", callback_data="ai_hint_persona")],
+        ])
+    except Exception:
+        return None
+
+
+async def _ai_edit_markup(message, text, reply_markup=None):
+    try:
+        return await message.edit_text(text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True, reply_markup=reply_markup)
+    except Exception:
+        try:
+            return await message.edit_text(text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+        except Exception:
+            return await _ai_edit(message, text)
+
+
+async def _ai_text_request(prompt, data, request_meta=None):
     """Text AI via 9Router OpenAI-compatible /chat/completions.
 
     Conversation memory/history are preserved by injecting them into the system
     prompt. 9Router may return normal JSON, concatenated JSON, or SSE chunks;
     the response parser below handles all of them.
     """
+    request_meta = request_meta or {}
     api_key = _ai_env("NINEROUTER_API_KEY", "")
     if not api_key:
         raise RuntimeError("NINEROUTER_API_KEY تنظیم نشده است. کلید 9Router را در Railway Variables بگذار.")
 
     base_url = _ai_env("NINEROUTER_BASE_URL", "https://9router-production-8331.up.railway.app/v1").rstrip("/")
-    model = _ai_env("NINEROUTER_MODEL", "my")
+    model = request_meta.get("model") or _ai_env("NINEROUTER_MODEL", "my")
+    persona_key = request_meta.get("persona") or data.get("ai_persona", "professional")
+    mode_key = request_meta.get("mode") or "auto"
+    persona_prompt = _AI_PERSONAS.get(persona_key, _AI_PERSONAS["professional"])
+    mode_prompt = _AI_MODES.get(mode_key, _AI_MODES["auto"])
 
     memory = data.get("ai_memory", []) if isinstance(data.get("ai_memory"), list) else []
     history = data.get("ai_history", []) if isinstance(data.get("ai_history"), list) else []
@@ -1597,6 +1758,9 @@ async def _ai_text_request(prompt, data):
 
     system_prompt = (
         "تو دستیار هوشمند TiTaN Self هستی. پیش‌فرض فارسی، دقیق، مفید و حرفه‌ای جواب بده.\n"
+        "پاسخ‌ها را واضح و کاربردی بده؛ بی‌دلیل طولانی نکن.\n"
+        f"[Persona] {persona_key}: {persona_prompt}\n"
+        f"[Mode] {mode_key}: {mode_prompt}\n\n"
         "از حافظه زیر به عنوان دانسته‌های پایدار کاربر استفاده کن. اگر چیزی در حافظه نبود، حدس نزن.\n\n"
         f"[حافظه دائمی]\n{memory_text if memory_text else '- موردی ثبت نشده است.'}"
     )
@@ -1800,19 +1964,61 @@ async def ai_pro_text_majidapi(app, m: Message):
             await _ai_edit(m, _ai_box("AI Chat Reset", [("History", "Cleared"), ("Memory", "Kept")]))
             raise StopPropagation
 
+        if low in ["help", "راهنما"]:
+            rows = [
+                ("Ask", ".ai سوال شما"),
+                ("Routes", ".ai /fast ... | /smart ... | /code ..."),
+                ("Modes", "/explain /code /translate /summarize /fix /better"),
+                ("Persona", ".ai persona developer|teacher|friendly|professional"),
+                ("Memory", ".ai learn ... | memory | forget N | reset"),
+            ]
+            await _ai_edit(m, _ai_box("AI Help", rows, footer="Minimal 9Router AI"))
+            raise StopPropagation
+
+        if low in ["personas", "persona list", "شخصیت ها", "شخصیت‌ها"]:
+            rows = [(k, v[:90]) for k, v in _AI_PERSONAS.items()]
+            rows.append(("Set", ".ai persona professional"))
+            await _ai_edit(m, _ai_box("AI Personas", rows, footer="Persona روی prompt اعمال می‌شود"))
+            raise StopPropagation
+
+        if low.startswith("persona ") or low.startswith("شخصیت "):
+            parts = cmd.split(maxsplit=1)
+            persona = parts[1].strip().lower() if len(parts) > 1 else ""
+            if persona not in _AI_PERSONAS:
+                await _ai_error(m, "AI Persona", f"شخصیت نامعتبر است: {persona}", ".ai personas")
+                raise StopPropagation
+            data["ai_persona"] = persona
+            _ai_save_data(data)
+            await _ai_edit(m, _ai_box("AI Persona Saved", [("Persona", persona), ("Use", ".ai سوال شما")], footer="TiTaN AI"))
+            raise StopPropagation
+
     except StopPropagation:
         raise
     except Exception as e:
         await _ai_error(m, "AI Memory", e, ".ai learn متن آموزشی")
         raise StopPropagation
 
-    await _ai_edit(m, _ai_box("9Router AI", [("Status", "Thinking…"), ("Model", data.get("ai_engine", "my")), ("Prompt", prompt[:180])], footer="9Router"))
+    req = _ai_parse_request(prompt, data)
+    clean_prompt = req.get("prompt", "").strip()
+    if not clean_prompt:
+        await _ai_error(m, "9Router AI", "متن سوال بعد از mode/model خالی است", ".ai /smart سوال شما")
+        raise StopPropagation
+
+    started_at = time.time()
+    await _ai_edit(m, _ai_box("AI Assistant", [
+        ("Status", "Thinking…"),
+        ("Mode", req.get("mode", "auto")),
+        ("Route", req.get("route", "smart")),
+        ("Persona", req.get("persona", "professional")),
+        ("Prompt", clean_prompt[:140]),
+    ], footer="9Router"))
     try:
-        answer, model = await _ai_text_request(prompt, data)
+        answer, model = await _ai_text_request(clean_prompt, data, req)
         _ai_save_data(data)
-        header = _ai_box("9Router AI Response", [("Model", model), ("Memory", len(data.get("ai_memory", []))), ("Prompt", prompt[:140])], footer="TiTaN AI Pro")
-        body = answer[:3300] + ("\n…" if len(answer) > 3300 else "")
-        await _ai_edit(m, f"{header}\n\n<b>Answer:</b>\n{_tools_html(body) if '_tools_html' in globals() else body}")
+        req["model"] = model
+        req["elapsed"] = time.time() - started_at
+        card = _ai_minimal_card(clean_prompt, answer, req)
+        await _ai_edit_markup(m, card, reply_markup=_ai_inline_buttons())
     except Exception as e:
         await _ai_error(m, "9Router AI", e, ".ai سلام")
     raise StopPropagation
@@ -1823,7 +2029,7 @@ async def ai_pro_old_text_disabled(app, m: Message):
     await _ai_edit(m, _ai_box("AI Text Commands Updated", [
         ("Old Command", (m.command[0] if getattr(m, "command", None) else "—")),
         ("New Command", ".ai متن سوال"),
-        ("Engine", "Grok / xAI"),
+        ("Engine", "9Router"),
     ], footer="دستورهای متنی قدیمی حذف شدند"))
     raise StopPropagation
 
