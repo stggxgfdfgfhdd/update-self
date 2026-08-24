@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-23-command-panel-bilingual-v8-0"
+FIX_VERSION = "2026-08-24-command-panel-bilingual-v8-1"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -784,6 +784,83 @@ def _noprefix_resolve_command(text):
     return None, ""
 
 
+
+_NOPREFIX_DIRECT_HANDLER_NAMES = {
+    "ping": "tools_pro_ping",
+    "weather": "tools_pro_weather",
+    "azan": "tools_pro_azan",
+    "ai": "ai_pro_text_majidapi",
+    "c": "tools_pro_currency",
+    "ip": "tools_pro_ip",
+    "whoisip": "tools_pro_whoisip",
+    "link": "tools_pro_shortlink",
+    "link2": "tools_pro_shortlink",
+    "github": "tools_pro_github",
+    "git": "tools_pro_git_repo",
+    "dict": "tools_pro_dictionary",
+    "dictionary": "tools_pro_dictionary",
+    "check": "tools_pro_number_check",
+    "shot": "tools_pro_screenshot",
+    "screenshot": "tools_pro_screenshot",
+    "qeymat": "market_pro_torob",
+    "price": "market_pro_basalam",
+    "cryptolist": "market_pro_cryptolist",
+    "crypto": "market_pro_crypto",
+    "trx": "market_pro_trx",
+    "tara": "market_pro_tara",
+    "tts": "ai_pro_tts_default",
+    "ttsf": "ai_pro_tts_female",
+    "ttsm": "ai_pro_tts_male",
+    "v": "ai_pro_tts_aliases",
+    "vl": "ai_pro_voice_list",
+    "sv": "ai_pro_set_voice",
+    "pgpt": "ai_pro_image",
+    "vc": "ai_pro_voice_changer",
+}
+
+async def _noprefix_execute_direct(app, message, cmd, rest):
+    """Execute modern no-prefix aliases directly without sending visible .command."""
+    func_name = _NOPREFIX_DIRECT_HANDLER_NAMES.get(cmd)
+    if not func_name:
+        return False
+    func = globals().get(func_name)
+    if not callable(func):
+        return False
+    original_text = message.text
+    # Reuse existing command functions safely by temporarily exposing dot-style text
+    # to their argument parser. The user's visible message is edited/deleted by the
+    # command itself; no extra .command message is sent to the chat.
+    message.text = f".{cmd}" + (f" {rest}" if rest else "")
+    try:
+        await func(app, message)
+    finally:
+        try:
+            message.text = original_text
+        except Exception:
+            pass
+    return True
+
+async def _noprefix_execute_builtin(app, message, cmd, rest):
+    if cmd == "session":
+        try:
+            await message.edit_text("❖ Self is **ON** ✅")
+        except Exception:
+            await message.reply_text("❖ Self is **ON** ✅")
+        return True
+    if cmd == "timename":
+        # Bridge only this legacy text-mode command directly by updating data.json,
+        # because it lives inside a huge text handler and cannot be called cleanly.
+        arg = (rest or "").strip().lower()
+        if arg not in ["on", "off"]:
+            await message.edit_text("❖ Usage: `ست تایم on/off` or `settime on/off`")
+            return True
+        data = json_read("data.json")
+        data.update({"timename": arg})
+        write("data.json", json.dumps(data, ensure_ascii=False))
+        await message.edit_text(f"❖ Time Name is **{arg.upper()}**")
+        return True
+    return False
+
 @app.on_message(filters.me & filters.text, group=-120)
 async def noprefix_command_bridge(app, message: Message):
     cmd, rest = _noprefix_resolve_command(message.text)
@@ -792,23 +869,21 @@ async def noprefix_command_bridge(app, message: Message):
     # Do not bridge ultra-generic one-letter commands unless the user sent exact command.
     if len(cmd) == 1 and rest:
         return
-    dot_text = f".{cmd}" + (f" {rest}" if rest else "")
     try:
-        sent = await app.send_message(
-            message.chat.id,
-            dot_text,
-            reply_to_message_id=getattr(getattr(message, "reply_to_message", None), "id", None),
-        )
-        try:
-            await message.delete()
-        except Exception:
-            pass
+        if await _noprefix_execute_direct(app, message, cmd, rest):
+            raise StopPropagation
+        if await _noprefix_execute_builtin(app, message, cmd, rest):
+            raise StopPropagation
+        # Low-risk fallback: do NOT send visible .command messages anymore.
+        # If a command is not wired for direct no-prefix execution yet, keep old
+        # dot-command compatibility instead of showing a confusing .command.
+        await message.edit_text(f"❖ این دستور هنوز برای اجرای بدون نقطه مستقیم نشده است. از `.{cmd}` استفاده کن.")
         raise StopPropagation
     except StopPropagation:
         raise
     except Exception as exc:
         try:
-            await message.reply_text(f"❖ No-prefix command bridge failed: `{exc}`")
+            await message.reply_text(f"❖ No-prefix command failed: `{exc}`")
         except Exception:
             pass
         raise StopPropagation
