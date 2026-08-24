@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-23-bilingual-panel-v8-0"
+FIX_VERSION = "2026-08-24-bilingual-panel-v8-1"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -4241,6 +4241,27 @@ async def _hp2_edit_or_send(client, call, text, markup):
             return await client.edit_inline_caption(call.inline_message_id, caption=text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
 
 
+
+@app.on_callback_query(filters.regex(r"^openpanel$"), group=-20)
+async def hp2_openpanel_language(client, call):
+    AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = '{call.from_user.id}' LIMIT 1")
+    if AdminUser is None:
+        await call.answer("دسترسی غیر مجاز 🚫", show_alert=False)
+        raise StopPropagation
+    text = "زبان پنل را انتخاب کن / Choose panel language:"
+    try:
+        if getattr(call, "message", None):
+            if getattr(call.message, "photo", None):
+                await client.edit_message_caption(call.message.chat.id, call.message.id, caption=text, reply_markup=_hp2_language_keyboard(call.from_user.id))
+            else:
+                await client.edit_message_text(call.message.chat.id, call.message.id, text=text, reply_markup=_hp2_language_keyboard(call.from_user.id))
+        else:
+            await client.send_message(call.from_user.id, text, reply_markup=_hp2_language_keyboard(call.from_user.id))
+    except Exception:
+        await client.send_message(call.from_user.id, text, reply_markup=_hp2_language_keyboard(call.from_user.id))
+    await call.answer()
+    raise StopPropagation
+
 @app.on_callback_query(filters.regex(r"^hp2:"), group=-10)
 async def hp2_callback(client, call):
     parts = (call.data or "").split(":")
@@ -4249,36 +4270,50 @@ async def hp2_callback(client, call):
         if action == "home":
             lang, uid = parts[2], parts[3]
             if not _hp2_user_ok(call, uid):
-                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True); return
+                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True)
+                raise StopPropagation
             _HP2_STATE[int(uid)] = {"lang": lang, "category": None, "page": 0}
             await _hp2_edit_or_send(client, call, _hp2_home_text(lang), _hp2_home_keyboard(lang, uid))
-            await call.answer(); return
+            await call.answer()
+            raise StopPropagation
         if action == "cat":
             lang, key, page, uid = parts[2], parts[3], int(parts[4]), parts[5]
             if not _hp2_user_ok(call, uid):
-                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True); return
+                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True)
+                raise StopPropagation
             text, total, page = _hp2_category_page_text(lang, key, page)
             _HP2_STATE[int(uid)] = {"lang": lang, "category": key, "page": page}
             await _hp2_edit_or_send(client, call, text, _hp2_category_keyboard(lang, key, page, total, uid))
-            await call.answer(); return
+            await call.answer()
+            raise StopPropagation
         if action == "close":
             lang, uid = parts[2], parts[3]
             if not _hp2_user_ok(call, uid):
-                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True); return
+                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True)
+                raise StopPropagation
             if getattr(call, "message", None):
-                try: await call.message.delete()
-                except Exception: await _hp2_edit_or_send(client, call, "Closed", None)
+                try:
+                    await call.message.delete()
+                except Exception:
+                    await _hp2_edit_or_send(client, call, "Closed", None)
             else:
                 await _hp2_edit_or_send(client, call, "Closed", None)
-            await call.answer(); return
+            await call.answer()
+            raise StopPropagation
         await call.answer("—", show_alert=False)
+        raise StopPropagation
+    except StopPropagation:
+        raise
     except Exception as exc:
         print(f"HP2 callback error: {exc}")
-        try: await call.answer("Panel error", show_alert=True)
-        except Exception: pass
+        try:
+            await call.answer("Panel error", show_alert=True)
+        except Exception:
+            pass
+        raise StopPropagation
 
 
-@app.on_message(filters.text & filters.regex(r"(?i)^(panel|help|helper|پنل|راهنما)$"), group=-30)
+@app.on_message(filters.text & filters.regex(r"(?i)^(panel|help|helper|پنل|راهنما)$"), group=-100)
 async def hp2_panel_trigger(client, message: Message):
     AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = '{message.from_user.id}' LIMIT 1")
     if AdminUser is None:
