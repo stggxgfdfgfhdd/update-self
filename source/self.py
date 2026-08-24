@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-23-ai-router-persona-v7-6"
+FIX_VERSION = "2026-08-23-command-panel-bilingual-v8-0"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -734,6 +734,85 @@ if_not_exist_creat("allSPEAKING.txt")
 #_________________________Client___________________________________
 app = Client(f"../../sessions/{admin}", api_id, api_hash, device_model="ULTRA-SELF", system_version="Linux")
 client = Client("Self", api_id, api_hash, device_model="ULTRA-SELF", system_version="Linux")
+
+
+# ================= No-Prefix Command Alias Bridge v8.0 =================
+# Low-risk compatibility layer: old dot-commands remain untouched. This bridge
+# converts selected no-prefix Persian/English commands into their existing dot
+# command equivalents by sending a temporary dot-command message.
+_NOPREFIX_COMMANDS = ['2autopic', '2timebio', '2timename', '3autopic', '3timebio', '4autopic', '4timebio', '5timebio', '6timebio', 'Pass', 'acc', 'add', 'addadmin', 'addall', 'addan', 'adminlist', 'afk', 'ahang', 'ahh', 'ai', 'anclear', 'anim', 'anime', 'anlist', 'answer', 'anti_fuck', 'antich', 'antilog', 'apk', 'app', 'asq', 'autopic', 'ayang', 'azan', 'babi', 'ban', 'bard', 'basketball', 'bazi', 'bing', 'bird', 'birdd', 'bisexual', 'bish', 'bkp', 'block', 'blue', 'blur', 'blurple', 'blurple2', 'blurple3', 'bomb', 'boob', 'botinfo', 'bowling', 'brain', 'bundir', 'c', 'call', 'cancel', 'cat', 'catt', 'ccgen', 'chance', 'charging', 'check', 'checkmail', 'ci', 'classic', 'clearadminlist', 'clone', 'com', 'coment_text', 'comrade', 'country', 'couple', 'creatgroup', 'cron', 'crush', 'crypto', 'cryptolist', 'dart', 'del', 'deladmin', 'delete', 'delupdate', 'delwebhook', 'demo', 'ding', 'dino', 'dllink', 'dog', 'dogg', 'doggg', 'down', 'down2', 'e', 'edit_biography', 'edit_firstname', 'emoji', 'en', 'error', 'estelam', 'exec', 'fa', 'fastspam', 'file_info', 'filter', 'firstcom', 'firstcomment', 'follow', 'fontname', 'football', 'fox', 'foxx', 'gabut', 'game', 'gay', 'getip', 'gif', 'giff', 'git', 'github', 'glass', 'global', 'go', 'google', 'gpt3', 'green', 'grey', 'grey2', 'hack', 'hehe', 'help', 'hlock', 'hmm', 'horny', 'hypo', 'id', 'igdl', 'iginfo', 'imdb', 'inf', 'instadl', 'instagetuser', 'instalogin', 'invitelink', 'ip', 'jail', 'java', 'join', 'js', 'kangaroo', 'khaymal', 'koala', 'kotlin', 'lad', 'latex', 'leave', 'leaveallch', 'leaveallgc', 'left', 'lesbian', 'lg', 'lgbt', 'like', 'limit_del', 'link', 'link2', 'location', 'locks', 'logo', 'logo2', 'lolice', 'love', 'loveyou', 'lua', 'ma', 'meli', 'melo', 'meme', 'mention', 'mobo', 'monshi', 'monshi2', 'monshioff', 'morset', 'movie', 'movie2', 'music', 'musicc', 'muzik', 'nah', 'name', 'newTon', 'newTron', 'news', 'non', 'nude', 'nude2', 'nude3', 'num', 'o', 'o2', 'offline', 'on_off_status', 'online', 'oqat', 'p', 'panda', 'panel', 'pass', 'pgpt', 'photo', 'photo_send_time', 'photo_time', 'photos', 'php', 'pic', 'pikachu', 'pindl', 'ping', 'pixel', 'postt', 'pp', 'price', 'psexual', 'pvlock', 'py', 'q', 'qeymat', 'qq', 'qrcode', 'raccoon', 'red', 'remix', 'rename', 'robo', 'rpanda', 'santet', 'screenshot', 'screenshot2', 'screenshot3', 'screenshot4', 'send_coment', 'sendall', 'sendgp', 'sendpv', 'sepia', 'session', 'setbannergp', 'setbannerpv', 'setbannersender', 'setbio', 'setchatbio', 'setchattitle', 'setlastname', 'setname', 'settimergp', 'settimerpv', 'setwebhook', 'shot', 'shutdown', 'simp', 'sms', 'snd', 'spam', 'spin', 'spm', 'stat', 'stick', 'sticker', 'story', 'storyy', 'stupid', 'sv', 't', 'tabchi status', 'tabchigp off', 'tabchigp on', 'tabchipv on', 'tagalert off', 'tagalert on', 'tagall', 'takhfif', 'tank', 'tara', 'tas', 'telegraph', 'tembak', 'text_send_time', 'text_time', 'threshold', 'timebio', 'timename', 'tiny', 'toni', 'trans', 'translate', 'trc20', 'trig', 'trx', 'tts', 'ttsf', 'ttsm', 'ultra', 'unafk', 'unban', 'unblock', 'unfollow', 'unmorset', 'uns', 'unsplash', 'v', 'vc', 'vl', 'voice', 'wasted', 'weather', 'webhookinfo', 'welcome', 'welcome_add', 'welcome_reset', 'welcome_show', 'whale', 'whoisip', 'wo', 'write', 'wtf', 'youtube', 'ytdl']
+_NOPREFIX_PHRASE_ALIASES = {
+    "پینگ": "ping",
+    "سلف": "session",
+    "سشن": "session",
+    "پنل": "help",
+    "راهنما": "help",
+    "ست تایم": "timename",
+    "تایم اسم": "timename",
+    "زمان اسم": "timename",
+    "هوش": "ai",
+    "هوش مصنوعی": "ai",
+    "منشی۲": "monshi2",
+    "منشی2": "monshi2",
+    "جوین اجباری": "monshi2",
+    "قیمت": "qeymat",
+    "بازار": "qeymat",
+    "آب و هوا": "weather",
+    "اذان": "azan",
+}
+_NOPREFIX_SINGLE_ALIASES = {
+    "ping": "ping", "self": "session", "session": "session", "help": "help", "panel": "help",
+    "settime": "timename", "ai": "ai", "monshi2": "monshi2",
+}
+
+
+def _noprefix_resolve_command(text):
+    raw = str(text or "").strip()
+    if not raw or raw.startswith((".", "/", "!", "#")):
+        return None, ""
+    lowered = raw.lower()
+    # phrase aliases first, longest wins
+    for phrase, cmd in sorted(_NOPREFIX_PHRASE_ALIASES.items(), key=lambda x: len(x[0]), reverse=True):
+        if raw == phrase or raw.startswith(phrase + " "):
+            return cmd, raw[len(phrase):].strip()
+    first, _, rest = raw.partition(" ")
+    first_l = first.lower()
+    if first_l in _NOPREFIX_SINGLE_ALIASES:
+        return _NOPREFIX_SINGLE_ALIASES[first_l], rest.strip()
+    if first_l in _NOPREFIX_COMMANDS:
+        return first_l, rest.strip()
+    return None, ""
+
+
+@app.on_message(filters.me & filters.text, group=-120)
+async def noprefix_command_bridge(app, message: Message):
+    cmd, rest = _noprefix_resolve_command(message.text)
+    if not cmd:
+        return
+    # Do not bridge ultra-generic one-letter commands unless the user sent exact command.
+    if len(cmd) == 1 and rest:
+        return
+    dot_text = f".{cmd}" + (f" {rest}" if rest else "")
+    try:
+        sent = await app.send_message(
+            message.chat.id,
+            dot_text,
+            reply_to_message_id=getattr(getattr(message, "reply_to_message", None), "id", None),
+        )
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        raise StopPropagation
+    except StopPropagation:
+        raise
+    except Exception as exc:
+        try:
+            await message.reply_text(f"❖ No-prefix command bridge failed: `{exc}`")
+        except Exception:
+            pass
+        raise StopPropagation
+# ================= End No-Prefix Command Alias Bridge =================
 
 
 # ================= Tools Pro / Core Repair v7.1 =================
