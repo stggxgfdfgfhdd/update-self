@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-24-bilingual-panel-v8-1"
+FIX_VERSION = "2026-08-25-bilingual-panel-v8-2"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -3587,7 +3587,7 @@ async def _titan_show_help_page(client, call, lang, key, page, user_id):
 
 
 async def send_titan_panel(client, chat_id, user=None, language="fa"):
-     """Generate a fresh Titan card and attach the self/helper controls to it."""
+     """Generate a fresh Titan card and show language choice before panel."""
      if user is None:
           user = await client.get_users(chat_id)
 
@@ -3596,7 +3596,8 @@ async def send_titan_panel(client, chat_id, user=None, language="fa"):
      await client.send_photo(
           chat_id,
           photo=titan_card_path,
-          reply_markup=build_titan_panel_keyboard(user.id, language=language)
+          caption="زبان پنل را انتخاب کن / Choose panel language:",
+          reply_markup=_hp2_language_keyboard(user.id)
      )
 
 
@@ -3881,16 +3882,18 @@ async def answer(client, inline_query):
           if inline_query.query.strip().lower() in ["panel", "help", "helper"] or inline_query.query.strip() in ["پنل", "راهنما"]:
                try:
                     user = await client.get_users(inline_query.from_user.id)
+                    lang_text = "زبان پنل را انتخاب کن / Choose panel language:"
+                    lang_markup = _hp2_language_keyboard(user.id)
                     try:
                          cached_file_id = await _titan_cached_photo_file_id(client, user)
                          await inline_query.answer(
                               results=[
                                    InlineQueryResultCachedPhoto(
                                         title="TiTaN SelfSaz Panel",
-                                        description="Dynamic TiTaN identity card panel",
+                                        description="Dynamic TiTaN identity card panel (Bilingual)",
                                         photo_file_id=cached_file_id,
-                                        caption="TiTaN SelfSaz Panel",
-                                        reply_markup=build_titan_panel_keyboard(user.id, language="fa")
+                                        caption=lang_text,
+                                        reply_markup=lang_markup
                                    )
                               ],
                               cache_time=1,
@@ -3903,11 +3906,11 @@ async def answer(client, inline_query):
                               results=[
                                    InlineQueryResultPhoto(
                                         title="TiTaN SelfSaz Panel",
-                                        description="Dynamic TiTaN identity card panel",
+                                        description="Dynamic TiTaN identity card panel (Bilingual)",
                                         photo_url=photo_url,
                                         thumb_url=photo_url,
-                                        caption="TiTaN SelfSaz Panel",
-                                        reply_markup=build_titan_panel_keyboard(user.id, language="fa")
+                                        caption=lang_text,
+                                        reply_markup=lang_markup
                                    )
                               ],
                               cache_time=1,
@@ -3915,21 +3918,20 @@ async def answer(client, inline_query):
                          )
                except Exception as exc:
                     print(f"{Fore.YELLOW}TITAN inline panel generation failed: {exc}{Fore.RESET}")
-                    # Last-resort fallback: do NOT show a useless error-only result.
-                    # Selecting this result leaves a button in the target chat; pressing it
-                    # sends the real local photo card with send_photo in that same chat.
                     await inline_query.answer(
                          results=[
                               InlineQueryResultArticle(
-                                   title="TiTaN Panel Backup",
-                                   input_message_content=InputTextMessageContent("**TiTaN panel is ready. Tap the button below to open the card here.**"),
-                                   description="Open TiTaN card in this chat",
-                                   reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚜️ Open TiTaN Card", callback_data='openpanel')]])
+                                   title="TiTaN SelfSaz Panel",
+                                   input_message_content=InputTextMessageContent("زبان پنل را انتخاب کن / Choose panel language:"),
+                                   description="Choose Persian or English panel",
+                                   reply_markup=_hp2_language_keyboard(inline_query.from_user.id)
                               ),
                          ],
                          cache_time=1,
                          is_personal=True
                     )
+
+          
 
           if inline_query.query == "coinprice":
                s = requests.get('https://api.nobitex.ir/market/stats?srcCurrency=usdt,trx,ton,btc,shib,eth,etc,usdt,ada,bch,ltc,bnb&dstCurrency=irt,rls,usdt')
@@ -4042,9 +4044,9 @@ async def answer(client, inline_query):
 
 
 
-# ================= Bilingual Help Center v8.0 =================
-# Independent, deterministic panel system. It does not remove the old Titan panel;
-# it intercepts panel/help triggers and uses stable hp2 callback data.
+# ================= Bilingual Help Center v8.2 =================
+# Independent, deterministic panel system. It displays bilingual language selection
+# before opening the panel and provides full paginated categories in FA and EN.
 _HP2_STATE = {}  # user_id -> {lang, category, page}
 _HP2_PER_PAGE = 14
 
@@ -4103,17 +4105,18 @@ def _hp2_i18n(lang, key):
         "choose": "زبان پنل را انتخاب کن:", "home_title": "مرکز راهنمای TiTaN SelfSaz", "home_desc": "یک دسته‌بندی را انتخاب کن.",
         "back": "🔙 بازگشت", "home": "🏠 خانه", "prev": "◀️ قبلی", "next": "بعدی ▶️", "close": "✖ بستن",
         "page": "صفحه", "category": "دسته‌بندی", "commands": "دستورات", "denied": "این پنل برای شما نیست.",
+        "change_lang": "🌐 تغییر زبان",
     }
     en = {
         "choose": "Choose panel language:", "home_title": "TiTaN SelfSaz Help Center", "home_desc": "Choose a category.",
         "back": "🔙 Back", "home": "🏠 Home", "prev": "◀️ Prev", "next": "Next ▶️", "close": "✖ Close",
         "page": "Page", "category": "Category", "commands": "Commands", "denied": "This panel is not yours.",
+        "change_lang": "🌐 Change Language",
     }
     return (fa if lang == "fa" else en).get(key, key)
 
 
 def _hp2_command_display(line, lang):
-    # Replace only command token inside old help text for Persian panel where a clean mapping exists.
     if lang != "fa":
         return line
     def repl(m):
@@ -4136,11 +4139,9 @@ def _hp2_extract_command_entries(raw_text, lang):
             entries.append((desc, cmd_line))
             pending_desc = []
         else:
-            # Keep short descriptions only; avoid decorative headers.
             clean = stripped.replace("**", "").strip()
             if clean and len(clean) < 140:
                 pending_desc.append(clean)
-    # Fallback: if parser cannot find commands, paginate raw lines deterministically.
     if not entries:
         for line in lines:
             line = line.strip()
@@ -4179,13 +4180,22 @@ def _hp2_home_keyboard(lang, uid):
             label = fa if lang == "fa" else en
             row.append(InlineKeyboardButton(label, callback_data=f"hp2:cat:{lang}:{key}:0:{uid}"))
         rows.append(row)
-    rows.append([InlineKeyboardButton(_hp2_i18n(lang, "close"), callback_data=f"hp2:close:{lang}:{uid}")])
+    rows.append([
+        InlineKeyboardButton(_hp2_i18n(lang, "change_lang"), callback_data=f"hp2:lang:{uid}"),
+        InlineKeyboardButton(_hp2_i18n(lang, "close"), callback_data=f"hp2:close:{lang}:{uid}")
+    ])
     return InlineKeyboardMarkup(rows)
 
 
 def _hp2_language_keyboard(uid):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🇮🇷 فارسی", callback_data=f"hp2:home:fa:{uid}"), InlineKeyboardButton("🇬🇧 English", callback_data=f"hp2:home:en:{uid}")]
+        [
+            InlineKeyboardButton("🇮🇷 فارسی", callback_data=f"hp2:home:fa:{uid}"),
+            InlineKeyboardButton("🇬🇧 English", callback_data=f"hp2:home:en:{uid}")
+        ],
+        [
+            InlineKeyboardButton("❌ بستن / Close", callback_data=f"hp2:close:fa:{uid}")
+        ]
     ])
 
 
@@ -4236,9 +4246,12 @@ async def _hp2_edit_or_send(client, call, text, markup):
             return await client.send_message(call.from_user.id, text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
     if getattr(call, "inline_message_id", None):
         try:
-            return await client.edit_inline_text(call.inline_message_id, text=text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
-        except Exception:
             return await client.edit_inline_caption(call.inline_message_id, caption=text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
+        except Exception:
+            try:
+                return await client.edit_inline_text(call.inline_message_id, text=text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
+            except Exception as e:
+                print(f"HP2 edit inline failed: {e}")
 
 
 
@@ -4267,6 +4280,15 @@ async def hp2_callback(client, call):
     parts = (call.data or "").split(":")
     action = parts[1] if len(parts) > 1 else ""
     try:
+        if action == "lang":
+            uid = parts[2]
+            if not _hp2_user_ok(call, uid):
+                await call.answer(_hp2_i18n("fa", "denied"), show_alert=True)
+                raise StopPropagation
+            text = "زبان پنل را انتخاب کن / Choose panel language:"
+            await _hp2_edit_or_send(client, call, text, _hp2_language_keyboard(uid))
+            await call.answer()
+            raise StopPropagation
         if action == "home":
             lang, uid = parts[2], parts[3]
             if not _hp2_user_ok(call, uid):
@@ -4318,11 +4340,15 @@ async def hp2_panel_trigger(client, message: Message):
     AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = '{message.from_user.id}' LIMIT 1")
     if AdminUser is None:
         return
-    text = "زبان پنل را انتخاب کن / Choose panel language:"
-    await client.send_message(message.chat.id, text, reply_markup=_hp2_language_keyboard(message.from_user.id))
+    try:
+        user = await client.get_users(message.from_user.id)
+        await send_titan_panel(client, message.chat.id, user=user)
+    except Exception:
+        text = "زبان پنل را انتخاب کن / Choose panel language:"
+        await client.send_message(message.chat.id, text, reply_markup=_hp2_language_keyboard(message.from_user.id))
     update_data(f"UPDATE user SET step = 'none' WHERE id = '{message.from_user.id}' LIMIT 1")
     raise StopPropagation
-# ================= End Bilingual Help Center v8.0 =================
+# ================= End Bilingual Help Center v8.2 =================
 
 @app.on_callback_query()
 async def call(app, call):
