@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-24-command-panel-bilingual-v8-1"
+FIX_VERSION = "2026-08-25-command-panel-bilingual-v8-2"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -736,10 +736,10 @@ app = Client(f"../../sessions/{admin}", api_id, api_hash, device_model="ULTRA-SE
 client = Client("Self", api_id, api_hash, device_model="ULTRA-SELF", system_version="Linux")
 
 
-# ================= No-Prefix Command Alias Bridge v8.0 =================
+# ================= No-Prefix Command Alias Bridge v8.2 =================
 # Low-risk compatibility layer: old dot-commands remain untouched. This bridge
 # converts selected no-prefix Persian/English commands into their existing dot
-# command equivalents by sending a temporary dot-command message.
+# command equivalents directly and cleanly.
 _NOPREFIX_COMMANDS = ['2autopic', '2timebio', '2timename', '3autopic', '3timebio', '4autopic', '4timebio', '5timebio', '6timebio', 'Pass', 'acc', 'add', 'addadmin', 'addall', 'addan', 'adminlist', 'afk', 'ahang', 'ahh', 'ai', 'anclear', 'anim', 'anime', 'anlist', 'answer', 'anti_fuck', 'antich', 'antilog', 'apk', 'app', 'asq', 'autopic', 'ayang', 'azan', 'babi', 'ban', 'bard', 'basketball', 'bazi', 'bing', 'bird', 'birdd', 'bisexual', 'bish', 'bkp', 'block', 'blue', 'blur', 'blurple', 'blurple2', 'blurple3', 'bomb', 'boob', 'botinfo', 'bowling', 'brain', 'bundir', 'c', 'call', 'cancel', 'cat', 'catt', 'ccgen', 'chance', 'charging', 'check', 'checkmail', 'ci', 'classic', 'clearadminlist', 'clone', 'com', 'coment_text', 'comrade', 'country', 'couple', 'creatgroup', 'cron', 'crush', 'crypto', 'cryptolist', 'dart', 'del', 'deladmin', 'delete', 'delupdate', 'delwebhook', 'demo', 'ding', 'dino', 'dllink', 'dog', 'dogg', 'doggg', 'down', 'down2', 'e', 'edit_biography', 'edit_firstname', 'emoji', 'en', 'error', 'estelam', 'exec', 'fa', 'fastspam', 'file_info', 'filter', 'firstcom', 'firstcomment', 'follow', 'fontname', 'football', 'fox', 'foxx', 'gabut', 'game', 'gay', 'getip', 'gif', 'giff', 'git', 'github', 'glass', 'global', 'go', 'google', 'gpt3', 'green', 'grey', 'grey2', 'hack', 'hehe', 'help', 'hlock', 'hmm', 'horny', 'hypo', 'id', 'igdl', 'iginfo', 'imdb', 'inf', 'instadl', 'instagetuser', 'instalogin', 'invitelink', 'ip', 'jail', 'java', 'join', 'js', 'kangaroo', 'khaymal', 'koala', 'kotlin', 'lad', 'latex', 'leave', 'leaveallch', 'leaveallgc', 'left', 'lesbian', 'lg', 'lgbt', 'like', 'limit_del', 'link', 'link2', 'location', 'locks', 'logo', 'logo2', 'lolice', 'love', 'loveyou', 'lua', 'ma', 'meli', 'melo', 'meme', 'mention', 'mobo', 'monshi', 'monshi2', 'monshioff', 'morset', 'movie', 'movie2', 'music', 'musicc', 'muzik', 'nah', 'name', 'newTon', 'newTron', 'news', 'non', 'nude', 'nude2', 'nude3', 'num', 'o', 'o2', 'offline', 'on_off_status', 'online', 'oqat', 'p', 'panda', 'panel', 'pass', 'pgpt', 'photo', 'photo_send_time', 'photo_time', 'photos', 'php', 'pic', 'pikachu', 'pindl', 'ping', 'pixel', 'postt', 'pp', 'price', 'psexual', 'pvlock', 'py', 'q', 'qeymat', 'qq', 'qrcode', 'raccoon', 'red', 'remix', 'rename', 'robo', 'rpanda', 'santet', 'screenshot', 'screenshot2', 'screenshot3', 'screenshot4', 'send_coment', 'sendall', 'sendgp', 'sendpv', 'sepia', 'session', 'setbannergp', 'setbannerpv', 'setbannersender', 'setbio', 'setchatbio', 'setchattitle', 'setlastname', 'setname', 'settimergp', 'settimerpv', 'setwebhook', 'shot', 'shutdown', 'simp', 'sms', 'snd', 'spam', 'spin', 'spm', 'stat', 'stick', 'sticker', 'story', 'storyy', 'stupid', 'sv', 't', 'tabchi status', 'tabchigp off', 'tabchigp on', 'tabchipv on', 'tagalert off', 'tagalert on', 'tagall', 'takhfif', 'tank', 'tara', 'tas', 'telegraph', 'tembak', 'text_send_time', 'text_time', 'threshold', 'timebio', 'timename', 'tiny', 'toni', 'trans', 'translate', 'trc20', 'trig', 'trx', 'tts', 'ttsf', 'ttsm', 'ultra', 'unafk', 'unban', 'unblock', 'unfollow', 'unmorset', 'uns', 'unsplash', 'v', 'vc', 'vl', 'voice', 'wasted', 'weather', 'webhookinfo', 'welcome', 'welcome_add', 'welcome_reset', 'welcome_show', 'whale', 'whoisip', 'wo', 'write', 'wtf', 'youtube', 'ytdl']
 _NOPREFIX_PHRASE_ALIASES = {
     "پینگ": "ping",
@@ -784,12 +784,14 @@ def _noprefix_resolve_command(text):
     return None, ""
 
 
-
 _NOPREFIX_DIRECT_HANDLER_NAMES = {
+    # Tools Pro
     "ping": "tools_pro_ping",
     "weather": "tools_pro_weather",
+    "w": "tools_pro_weather",
     "azan": "tools_pro_azan",
-    "ai": "ai_pro_text_majidapi",
+    "t": "tools_pro_temperature",
+    "e": "tools_pro_calc",
     "c": "tools_pro_currency",
     "ip": "tools_pro_ip",
     "whoisip": "tools_pro_whoisip",
@@ -802,20 +804,74 @@ _NOPREFIX_DIRECT_HANDLER_NAMES = {
     "check": "tools_pro_number_check",
     "shot": "tools_pro_screenshot",
     "screenshot": "tools_pro_screenshot",
+    "screenshot2": "tools_pro_screenshot",
+    "screenshot3": "tools_pro_screenshot",
+    "screenshot4": "tools_pro_screenshot",
+    # Market Pro
     "qeymat": "market_pro_torob",
     "price": "market_pro_basalam",
     "cryptolist": "market_pro_cryptolist",
     "crypto": "market_pro_crypto",
     "trx": "market_pro_trx",
     "tara": "market_pro_tara",
+    # AI Pro
+    "ai": "ai_pro_text_majidapi",
     "tts": "ai_pro_tts_default",
     "ttsf": "ai_pro_tts_female",
     "ttsm": "ai_pro_tts_male",
     "v": "ai_pro_tts_aliases",
+    "voice": "ai_pro_tts_aliases",
+    "crush": "ai_pro_tts_aliases",
+    "wo": "ai_pro_tts_aliases",
+    "ma": "ai_pro_tts_aliases",
     "vl": "ai_pro_voice_list",
     "sv": "ai_pro_set_voice",
     "pgpt": "ai_pro_image",
     "vc": "ai_pro_voice_changer",
+    "voicechange": "ai_pro_voice_changer",
+    # Monshi2 Pro & PV lock
+    "monshi2": "safe_monshi2_command",
+    "pvlock": "safe_pvlock_command",
+    "block": "safe_block_unblock",
+    "unblock": "safe_block_unblock",
+    "lock": "locks_func",
+    "unlock": "locks_func",
+    "locks": "locktypes",
+    "setenemy": "safe_enemy_commands",
+    "delenemy": "safe_enemy_commands",
+    "clearenemy": "safe_enemy_commands",
+    "enemylist": "safe_enemy_commands",
+    "setlove": "safe_love_commands",
+    "dellove": "safe_love_commands",
+    "clearlove": "safe_love_commands",
+    "lovelist": "safe_love_commands",
+    "spam": "controlled_spam",
+    "statspam": "controlled_spam",
+    "slowspam": "controlled_spam",
+    "fastspam": "fastspam",
+    "cancel": "cancel_spam",
+    "tagall": "mentionall",
+    "del": "delete_messages",
+    "delete": "delete_messages",
+    "down": "instag",
+    "down2": "sosmed",
+    "unsplash": "unsplash_pictures",
+    "qq": "quotly",
+    "q": "quotly1",
+    "bkp": "bkp_cmd",
+    "afk": "afk",
+    "unafk": "unafk",
+    "monshi": "monshi",
+    "monshioff": "monshioff",
+    "invitelink": "invite_link",
+    "leaveallch": "kickmeallch",
+    "tiny": "tinying",
+    "packinfo": "packinfo",
+    "stickerinfo": "packinfo",
+    "telegraph": "telegraph",
+    "shutdown": "shutdown_bot",
+    "latex": "latex",
+    "country": "country_",
 }
 
 async def _noprefix_execute_direct(app, message, cmd, rest):
@@ -859,6 +915,37 @@ async def _noprefix_execute_builtin(app, message, cmd, rest):
         write("data.json", json.dumps(data, ensure_ascii=False))
         await message.edit_text(f"❖ Time Name is **{arg.upper()}**")
         return True
+    if cmd in ["help", "panel"]:
+        try:
+            bot_results = await app.get_inline_bot_results(bot_id, "panel")
+            if bot_results and getattr(bot_results, "results", None):
+                await app.send_inline_bot_result(message.chat.id, bot_results.query_id, bot_results.results[0].id)
+                try:
+                    await message.delete()
+                except Exception:
+                    pass
+                return True
+        except Exception as exc:
+            print(f"No-prefix panel builtin error: {exc}")
+        return True
+    return False
+
+async def _noprefix_execute_modes_or_fallback(app, message, cmd, rest):
+    """Execute legacy commands inside modes() directly if present."""
+    modes_func = globals().get("modes")
+    if callable(modes_func):
+        original_text = message.text
+        message.text = f".{cmd}" + (f" {rest}" if rest else "")
+        try:
+            await modes_func(app, message)
+            return True
+        except Exception as exc:
+            print(f"No-prefix modes fallback error: {exc}")
+        finally:
+            try:
+                message.text = original_text
+            except Exception:
+                pass
     return False
 
 @app.on_message(filters.me & filters.text, group=-120)
@@ -874,19 +961,14 @@ async def noprefix_command_bridge(app, message: Message):
             raise StopPropagation
         if await _noprefix_execute_builtin(app, message, cmd, rest):
             raise StopPropagation
-        # Low-risk fallback: do NOT send visible .command messages anymore.
-        # If a command is not wired for direct no-prefix execution yet, keep old
-        # dot-command compatibility instead of showing a confusing .command.
-        await message.edit_text(f"❖ این دستور هنوز برای اجرای بدون نقطه مستقیم نشده است. از `.{cmd}` استفاده کن.")
-        raise StopPropagation
+        if await _noprefix_execute_modes_or_fallback(app, message, cmd, rest):
+            raise StopPropagation
+        return
     except StopPropagation:
         raise
     except Exception as exc:
-        try:
-            await message.reply_text(f"❖ No-prefix command failed: `{exc}`")
-        except Exception:
-            pass
-        raise StopPropagation
+        print(f"No-prefix command bridge exception: {exc}")
+        return
 # ================= End No-Prefix Command Alias Bridge =================
 
 
@@ -956,1194 +1038,53 @@ def _tools_requests_get(url, **kwargs):
 
 
 async def _tools_get_json(url, **kwargs):
+    # Candidate models for automatic fallback retry if primary model hits rate limit
+    models_to_try = [model]
+    for alt_model in [
+        _ai_env("NINEROUTER_FAST_MODEL"),
+        _ai_env("NINEROUTER_SMART_MODEL"),
+        _ai_env("NINEROUTER_CODE_MODEL"),
+    ]:
+        if alt_model and alt_model not in models_to_try:
+            models_to_try.append(alt_model)
+
     def run():
-        r = _tools_requests_get(url, **kwargs)
-        r.raise_for_status()
-        return r.json()
-    return await asyncio.to_thread(run)
-
-
-async def _tools_get_text(url, **kwargs):
-    def run():
-        r = _tools_requests_get(url, **kwargs)
-        r.raise_for_status()
-        return r.text.strip()
-    return await asyncio.to_thread(run)
-
-
-def _tools_normalize_url(url):
-    url = str(url or "").strip()
-    if not url:
-        return ""
-    if not re.match(r"^https?://", url, re.I):
-        url = "https://" + url
-    return url
-
-
-@app.on_message(filters.command(["weather", "w"], ".") & filters.me, group=-80)
-async def tools_pro_weather(app, m: Message):
-    city = _tools_arg(m)
-    if not city:
-        await _tools_error(m, "Weather", "City is required", ".weather Tehran")
-        raise StopPropagation
-    await _tools_edit(m, _tools_box("Weather", [("Status", "Fetching…"), ("City", city)]))
-    try:
-        data = await _tools_get_json(f"https://wttr.in/{urllib.parse.quote(city)}", params={"format": "j1"})
-        current = (data.get("current_condition") or [{}])[0]
-        area = (data.get("nearest_area") or [{}])[0]
-        name = ((area.get("areaName") or [{}])[0].get("value") or city)
-        country = ((area.get("country") or [{}])[0].get("value") or "—")
-        rows = [
-            ("City", f"{name}, {country}"),
-            ("Temperature", f"{current.get('temp_C', '—')}°C / {current.get('temp_F', '—')}°F"),
-            ("Feels Like", f"{current.get('FeelsLikeC', '—')}°C"),
-            ("Condition", ((current.get("weatherDesc") or [{}])[0].get("value") or "—")),
-            ("Humidity", f"{current.get('humidity', '—')}%"),
-            ("Wind", f"{current.get('windspeedKmph', '—')} km/h"),
-        ]
-        await _tools_edit(m, _tools_box("Premium Weather", rows))
-    except Exception as e:
-        await _tools_error(m, "Weather", e, ".weather Tehran")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["azan"], ".") & filters.me, group=-80)
-async def tools_pro_azan(app, m: Message):
-    city = _tools_arg(m)
-    if not city:
-        await _tools_error(m, "Prayer Times", "City/address is required", ".azan Tehran")
-        raise StopPropagation
-    await _tools_edit(m, _tools_box("Prayer Times", [("Status", "Fetching…"), ("Address", city)]))
-    try:
-        data = await _tools_get_json("https://api.aladhan.com/v1/timingsByAddress", params={"address": city, "method": 8})
-        obj = data.get("data", {})
-        timings = obj.get("timings", {})
-        date_obj = obj.get("date", {})
-        meta = obj.get("meta", {})
-        rows = [
-            ("Address", city),
-            ("Date", (date_obj.get("readable") or "—")),
-            ("Timezone", meta.get("timezone", "—")),
-            ("Fajr", timings.get("Fajr", "—")),
-            ("Sunrise", timings.get("Sunrise", "—")),
-            ("Dhuhr", timings.get("Dhuhr", "—")),
-            ("Asr", timings.get("Asr", "—")),
-            ("Maghrib", timings.get("Maghrib", "—")),
-            ("Isha", timings.get("Isha", "—")),
-        ]
-        await _tools_edit(m, _tools_box("Premium Azan", rows))
-    except Exception as e:
-        await _tools_error(m, "Prayer Times", e, ".azan Tehran")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["t"], ".") & filters.me, group=-80)
-async def tools_pro_temperature(app, m: Message):
-    arg = _tools_arg(m)
-    try:
-        parts = arg.split()
-        if len(parts) < 2:
-            raise ValueError("Need value and unit")
-        value = float(parts[0].replace(",", "."))
-        unit = parts[1].lower().strip()
-        if unit in ["c", "°c", "celsius"]:
-            c = value
-        elif unit in ["f", "°f", "fahrenheit"]:
-            c = (value - 32) * 5 / 9
-        elif unit in ["k", "kelvin"]:
-            c = value - 273.15
-        else:
-            raise ValueError("Unit must be c, f, or k")
-        f = c * 9 / 5 + 32
-        k = c + 273.15
-        rows = [("Celsius", f"{c:.2f} °C"), ("Fahrenheit", f"{f:.2f} °F"), ("Kelvin", f"{k:.2f} K")]
-        await _tools_edit(m, _tools_box("Temperature Converter", rows))
-    except Exception as e:
-        await _tools_error(m, "Temperature", e, ".t 25 c")
-    raise StopPropagation
-
-
-_MATH_ALLOWED_FUNCS = {name: getattr(math, name) for name in ["sqrt", "sin", "cos", "tan", "log", "log10", "floor", "ceil", "fabs"] if hasattr(math, name)}
-_MATH_ALLOWED_FUNCS.update({"abs": abs, "round": round, "pow": pow})
-_MATH_ALLOWED_NAMES = {"pi": math.pi, "e": math.e}
-
-
-def _safe_math_eval(expr):
-    import ast as _ast
-    import operator as _op
-    ops = {
-        _ast.Add: _op.add, _ast.Sub: _op.sub, _ast.Mult: _op.mul, _ast.Div: _op.truediv,
-        _ast.FloorDiv: _op.floordiv, _ast.Mod: _op.mod, _ast.Pow: _op.pow,
-        _ast.USub: _op.neg, _ast.UAdd: _op.pos,
-    }
-    def ev(node):
-        if isinstance(node, _ast.Expression):
-            return ev(node.body)
-        if isinstance(node, _ast.Constant) and isinstance(node.value, (int, float)):
-            return node.value
-        if isinstance(node, _ast.Num):
-            return node.n
-        if isinstance(node, _ast.BinOp) and type(node.op) in ops:
-            return ops[type(node.op)](ev(node.left), ev(node.right))
-        if isinstance(node, _ast.UnaryOp) and type(node.op) in ops:
-            return ops[type(node.op)](ev(node.operand))
-        if isinstance(node, _ast.Name) and node.id in _MATH_ALLOWED_NAMES:
-            return _MATH_ALLOWED_NAMES[node.id]
-        if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name) and node.func.id in _MATH_ALLOWED_FUNCS:
-            return _MATH_ALLOWED_FUNCS[node.func.id](*[ev(a) for a in node.args])
-        raise ValueError("Unsupported expression")
-    return ev(_ast.parse(expr, mode="eval"))
-
-
-@app.on_message(filters.command(["e"], ".") & filters.me, group=-80)
-async def tools_pro_calc(app, m: Message):
-    expr = _tools_arg(m)
-    if not expr:
-        await _tools_error(m, "Calculator", "Expression is required", ".e 2+2")
-        raise StopPropagation
-    try:
-        result = _safe_math_eval(expr)
-        await _tools_edit(m, _tools_box("Safe Calculator", [("Expression", expr), ("Result", result)]))
-    except Exception as e:
-        await _tools_error(m, "Calculator", e, ".e sqrt(25)+2")
-    raise StopPropagation
-
-
-_CRYPTO_IDS = {
-    "btc": "bitcoin", "bitcoin": "bitcoin", "eth": "ethereum", "ethereum": "ethereum",
-    "usdt": "tether", "tether": "tether", "usdc": "usd-coin", "bnb": "binancecoin",
-    "trx": "tron", "ton": "the-open-network", "ada": "cardano", "doge": "dogecoin",
-    "shib": "shiba-inu", "ltc": "litecoin", "xrp": "ripple", "sol": "solana",
-}
-_FIAT_ALIASES = {"toman": "toman", "irt": "toman", "tmn": "toman", "rial": "irr", "rls": "irr", "irr": "irr", "usd": "usd", "eur": "eur", "gbp": "gbp", "try": "try"}
-
-
-async def _coinbase_rate(src, dst):
-    """Stable no-key converter. Coinbase supports many crypto/fiat rates including IRR."""
-    src = str(src or "").upper()
-    dst = str(dst or "").upper()
-    data = await _tools_get_json("https://api.coinbase.com/v2/exchange-rates", params={"currency": src})
-    rates = (data.get("data") or {}).get("rates") or {}
-    if dst not in rates:
-        raise ValueError(f"Rate {src}->{dst} not available")
-    return float(rates[dst])
-
-
-async def _crypto_toman_rate(symbol):
-    """Return 1 SYMBOL price in Toman using robust fallback.
-
-    1) Coinbase direct SYMBOL->IRR if available.
-    2) CoinGecko SYMBOL->USD multiplied by Coinbase USDT->IRR.
-    """
-    sym = str(symbol or "").lower().strip()
-    try:
-        return await _coinbase_rate(sym.upper(), "IRR") / 10
-    except Exception:
-        coin_id = _MARKET_CRYPTO_SYMBOLS.get(sym, _CRYPTO_IDS.get(sym, sym)) if "_MARKET_CRYPTO_SYMBOLS" in globals() else _CRYPTO_IDS.get(sym, sym)
-        data = await _tools_get_json("https://api.coingecko.com/api/v3/simple/price", params={"ids": coin_id, "vs_currencies": "usd"})
-        usd_price = float(data[coin_id]["usd"])
-        usdt_irr = await _coinbase_rate("USDT", "IRR")
-        return usd_price * usdt_irr / 10
-
-
-@app.on_message(filters.command(["c"], ".") & filters.me, group=-80)
-async def tools_pro_currency(app, m: Message):
-    arg = _tools_arg(m)
-    try:
-        parts = arg.split()
-        if len(parts) < 3:
-            raise ValueError("Need amount, source, target")
-        amount = float(parts[0].replace(",", "."))
-        src = parts[1].lower()
-        dst = parts[2].lower()
-        if dst in ["toman", "irt", "tmn"]:
-            price = await _crypto_toman_rate(src)
-            result = amount * price
-            rows = [("Amount", f"{amount:g} {src.upper()}"), ("Price", f"{price:,.0f} TOMAN"), ("Result", f"{result:,.0f} TOMAN"), ("Source", "Coinbase/CoinGecko smart toman")]
-        else:
-            vs = _FIAT_ALIASES.get(dst, dst).upper()
+        last_error = ""
+        for cur_model in models_to_try:
+            cur_payload = dict(payload)
+            cur_payload["model"] = cur_model
             try:
-                price = await _coinbase_rate(src, vs)
-                source_name = "Coinbase"
-            except Exception:
-                coin_id = _CRYPTO_IDS.get(src, src)
-                vs2 = _FIAT_ALIASES.get(dst, dst).lower()
-                data = await _tools_get_json("https://api.coingecko.com/api/v3/simple/price", params={"ids": coin_id, "vs_currencies": vs2})
-                price = float(data[coin_id][vs2])
-                source_name = "CoinGecko"
-            result = amount * price
-            rows = [("Amount", f"{amount:g} {src.upper()}"), ("Price", f"{price:,.8g} {dst.upper()}"), ("Result", f"{result:,.8g} {dst.upper()}"), ("Source", source_name)]
-        await _tools_edit(m, _tools_box("Crypto Converter", rows))
-    except Exception as e:
-        await _tools_error(m, "Crypto Converter", e, ".c 100 usdt toman")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["ip"], ".") & filters.me, group=-80)
-async def tools_pro_ip(app, m: Message):
-    host = _tools_arg(m).replace("https://", "").replace("http://", "").split("/")[0].strip()
-    if not host:
-        await _tools_error(m, "Domain IP", "Domain is required", ".ip google.com")
-        raise StopPropagation
-    try:
-        ip_addr = await asyncio.to_thread(gethostbyname, host)
-        await _tools_edit(m, _tools_box("Domain Resolver", [("Domain", host), ("IP", ip_addr)]))
-    except Exception as e:
-        await _tools_error(m, "Domain IP", e, ".ip google.com")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["whoisip"], ".") & filters.me, group=-80)
-async def tools_pro_whoisip(app, m: Message):
-    ip = _tools_arg(m)
-    if not ip:
-        await _tools_error(m, "IP Info", "IP is required", ".whoisip 8.8.8.8")
-        raise StopPropagation
-    try:
-        data = await _tools_get_json(f"https://ipwho.is/{urllib.parse.quote(ip)}")
-        if data.get("success") is False:
-            raise ValueError(data.get("message", "IP lookup failed"))
-        rows = [("IP", data.get("ip")), ("Country", data.get("country")), ("City", data.get("city")), ("ISP", (data.get("connection") or {}).get("isp")), ("Timezone", (data.get("timezone") or {}).get("id")), ("Lat/Lon", f"{data.get('latitude')}, {data.get('longitude')}")]
-        await _tools_edit(m, _tools_box("Premium IP Info", rows))
-    except Exception as e:
-        await _tools_error(m, "IP Info", e, ".whoisip 8.8.8.8")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["p", "ping", "پینگ"], ".") & filters.me, group=-80)
-async def tools_pro_ping(app, m: Message):
-    target = _tools_arg(m) or "https://telegram.org"
-    url = _tools_normalize_url(target)
-    try:
-        start = time.time()
-        def run():
-            return _tools_requests_get(url, timeout=8, allow_redirects=True)
-        r = await asyncio.to_thread(run)
-        latency = (time.time() - start) * 1000
-        rows = [("Target", url), ("Status", r.status_code), ("Latency", f"{latency:.0f} ms"), ("Server", r.headers.get("server", "—"))]
-        await _tools_edit(m, _tools_box("HTTP Ping", rows))
-    except Exception as e:
-        await _tools_error(m, "Ping", e, ".p google.com")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["link", "link2"], ".") & filters.me, group=-80)
-async def tools_pro_shortlink(app, m: Message):
-    url = _tools_reply_or_arg(m)
-    if not url:
-        await _tools_error(m, "Short Link", "URL is required", ".link https://example.com")
-        raise StopPropagation
-    url = _tools_normalize_url(url)
-    try:
-        short = await _tools_get_text("https://tinyurl.com/api-create.php", params={"url": url})
-        if not short.startswith("http"):
-            raise ValueError(short[:200])
-        rows = [("Original", url[:160]), ("Short", short)]
-        await _tools_edit(m, _tools_box("Premium Shortener", rows))
-    except Exception as e:
-        await _tools_error(m, "Short Link", e, ".link https://example.com")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["github"], ".") & filters.me, group=-80)
-async def tools_pro_github(app, m: Message):
-    username = _tools_arg(m).strip().lstrip("@")
-    if not username:
-        await _tools_error(m, "GitHub User", "Username is required", ".github torvalds")
-        raise StopPropagation
-    try:
-        data = await _tools_get_json(f"https://api.github.com/users/{urllib.parse.quote(username)}")
-        rows = [("Name", data.get("name") or data.get("login")), ("Username", data.get("login")), ("Followers", data.get("followers")), ("Following", data.get("following")), ("Repos", data.get("public_repos")), ("Company", data.get("company") or "—"), ("Location", data.get("location") or "—"), ("Profile", data.get("html_url"))]
-        await _tools_edit(m, _tools_box("GitHub Profile", rows))
-    except Exception as e:
-        await _tools_error(m, "GitHub User", e, ".github torvalds")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["git"], ".") & filters.me, group=-80)
-async def tools_pro_git_repo(app, m: Message):
-    query = _tools_arg(m)
-    if not query:
-        await _tools_error(m, "GitHub Repo", "Repo or search text is required", ".git owner/repo")
-        raise StopPropagation
-    try:
-        if "/" in query and len(query.split("/")) >= 2:
-            owner, repo = query.split("/", 1)
-            data = await _tools_get_json(f"https://api.github.com/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}")
-        else:
-            sr = await _tools_get_json("https://api.github.com/search/repositories", params={"q": query, "sort": "stars", "order": "desc", "per_page": 1})
-            items = sr.get("items") or []
-            if not items:
-                raise ValueError("No repository found")
-            data = items[0]
-        rows = [("Repo", data.get("full_name")), ("Stars", data.get("stargazers_count")), ("Forks", data.get("forks_count")), ("Language", data.get("language") or "—"), ("Issues", data.get("open_issues_count")), ("Updated", data.get("updated_at")), ("URL", data.get("html_url"))]
-        await _tools_edit(m, _tools_box("GitHub Repository", rows))
-    except Exception as e:
-        await _tools_error(m, "GitHub Repo", e, ".git owner/repo")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["dictionary", "dict"], ".") & filters.me, group=-80)
-async def tools_pro_dictionary(app, m: Message):
-    word = _tools_arg(m).strip()
-    if not word:
-        await _tools_error(m, "Dictionary", "Word is required", ".dict hello")
-        raise StopPropagation
-    try:
-        data = await _tools_get_json(f"https://api.dictionaryapi.dev/api/v2/entries/en/{urllib.parse.quote(word)}")
-        entry = data[0]
-        phonetic = entry.get("phonetic") or "—"
-        meanings = entry.get("meanings") or []
-        rows = [("Word", entry.get("word", word)), ("Phonetic", phonetic)]
-        if meanings:
-            m0 = meanings[0]
-            defs = m0.get("definitions") or []
-            rows.append(("Part", m0.get("partOfSpeech", "—")))
-            if defs:
-                rows.append(("Meaning", defs[0].get("definition", "—")[:500]))
-                if defs[0].get("example"):
-                    rows.append(("Example", defs[0].get("example")[:300]))
-        await _tools_edit(m, _tools_box("Premium Dictionary", rows))
-    except Exception as e:
-        await _tools_error(m, "Dictionary", e, ".dict hello")
-    raise StopPropagation
-
-
-
-@app.on_message(filters.command(["check"], ".") & filters.me, group=-80)
-async def tools_pro_number_check(app, m: Message):
-    number = _tools_arg(m).replace(" ", "")
-    if not number:
-        await _tools_error(m, "Number Check", "Phone number is required", ".check +491234567890")
-        raise StopPropagation
-    try:
-        import phonenumbers
-        from phonenumbers import carrier, geocoder, timezone as pn_timezone
-        parsed = phonenumbers.parse(number, None)
-        rows = [
-            ("Number", phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL)),
-            ("Valid", "YES" if phonenumbers.is_valid_number(parsed) else "NO"),
-            ("Possible", "YES" if phonenumbers.is_possible_number(parsed) else "NO"),
-            ("Country", geocoder.description_for_number(parsed, "en") or "—"),
-            ("Carrier", carrier.name_for_number(parsed, "en") or "—"),
-            ("Timezone", ", ".join(pn_timezone.time_zones_for_number(parsed)) or "—"),
-        ]
-        await _tools_edit(m, _tools_box("Premium Number Check", rows, footer="Offline library; no broken API"))
-    except Exception as e:
-        await _tools_error(m, "Number Check", e, ".check +491234567890")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["shot", "screenshot", "screenshot2", "screenshot3", "screenshot4"], ".") & filters.me, group=-80)
-async def tools_pro_screenshot(app, m: Message):
-    url = _tools_reply_or_arg(m)
-    if not url:
-        await _tools_error(m, "Website Screenshot", "URL/domain is required", ".shot example.com")
-        raise StopPropagation
-    url = _tools_normalize_url(url)
-    await _tools_edit(m, _tools_box("Website Screenshot", [("Status", "Rendering…"), ("URL", url[:160])]))
-    try:
-        shot_url = "https://image.thum.io/get/width/1280/crop/900/noanimate/" + urllib.parse.quote(url, safe=":/")
-        # Validate service before asking Telegram to fetch it.
-        def probe():
-            r = _tools_requests_get(shot_url, timeout=18)
-            r.raise_for_status()
-            ctype = r.headers.get("content-type", "")
-            if "image" not in ctype.lower():
-                raise ValueError(f"Screenshot service returned {ctype}")
-            return len(r.content)
-        size = await asyncio.to_thread(probe)
-        caption = _tools_box("Premium WebShot", [("URL", url[:160]), ("Engine", "thum.io"), ("Size", f"{size/1024:.1f} KB")])
-        await app.send_photo(m.chat.id, shot_url, caption=caption, parse_mode=enums.ParseMode.HTML, reply_to_message_id=m.id)
-        try:
-            await m.delete()
-        except Exception:
-            pass
-    except Exception as e:
-        await _tools_error(m, "Website Screenshot", e, ".shot example.com")
-    raise StopPropagation
-
-# ================= End Tools Pro / Core Repair =================
-
-
-# ================= Market Pro / Iran + Crypto v7.2 =================
-_MARKET_VERSION = "2026-08-21-market-pro-v7-2"
-_MARKET_CRYPTO_SYMBOLS = {
-    "btc": "bitcoin", "bitcoin": "bitcoin",
-    "eth": "ethereum", "ethereum": "ethereum",
-    "usdt": "tether", "tether": "tether",
-    "trx": "tron", "tron": "tron",
-    "ton": "the-open-network", "toncoin": "the-open-network",
-    "bnb": "binancecoin", "xrp": "ripple", "ada": "cardano",
-    "doge": "dogecoin", "shib": "shiba-inu", "sol": "solana",
-    "ltc": "litecoin", "bch": "bitcoin-cash", "link": "chainlink",
-    "dot": "polkadot", "matic": "matic-network", "avax": "avalanche-2",
-    "usdc": "usd-coin", "dai": "dai", "etc": "ethereum-classic",
-    "uni": "uniswap", "aave": "aave", "sand": "the-sandbox",
-    "mana": "decentraland", "ftm": "fantom", "axs": "axie-infinity",
-}
-
-
-def _market_money(value, suffix="تومان"):
-    try:
-        return f"{float(value):,.0f} {suffix}"
-    except Exception:
-        return str(value or "—")
-
-
-def _market_extract_price_text(text):
-    text = str(text or "")
-    m = re.search(r"([\d۰-۹٠-٩][\d۰-۹٠-٩,\.٬\s]{2,})\s*(تومان|ریال|ريال)", text)
-    return m.group(0).strip() if m else "—"
-
-
-def _market_clean_snippet(text, limit=300):
-    text = re.sub(r"\s+", " ", html.unescape(str(text or ""))).strip()
-    return text[:limit] + ("…" if len(text) > limit else "")
-
-
-async def _market_ddg_site_search(query, site, label):
-    """Fallback for Iranian marketplaces when their public API is blocked/slow."""
-    q = f"site:{site} {query} قیمت"
-    def run():
-        r = _tools_requests_get("https://html.duckduckgo.com/html/", params={"q": q}, timeout=14)
-        r.raise_for_status()
-        return r.text
-    raw = await asyncio.to_thread(run)
-    # Very small, dependency-free extraction of first result.
-    title = "—"; link = f"https://{site}"; snippet = "—"
-    mt = re.search(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', raw, re.S)
-    if mt:
-        link = html.unescape(mt.group(1))
-        title = re.sub(r"<.*?>", "", mt.group(2))
-        title = _market_clean_snippet(title, 120)
-    ms = re.search(r'class="result__snippet"[^>]*>(.*?)</a>', raw, re.S)
-    if ms:
-        snippet = _market_clean_snippet(re.sub(r"<.*?>", "", ms.group(1)), 300)
-    price = _market_extract_price_text(snippet)
-    return {"engine": f"{label} Web Fallback", "title": title, "price": price, "shop": "—", "url": link, "snippet": snippet, "image": ""}
-
-
-async def _market_torob_search(query):
-    # Direct public Torob endpoint. Field names are parsed flexibly.
-    try:
-        data = await _tools_get_json("https://api.torob.com/v4/base-product/search/", params={"query": query, "page": 0}, timeout=16)
-        items = data.get("results") or data.get("result") or data.get("products") or []
-        if items:
-            item = items[0]
-            title = item.get("name1") or item.get("name") or item.get("title") or item.get("name2") or query
-            price = item.get("price_text") or item.get("price") or item.get("min_price") or "—"
-            if isinstance(price, (int, float)):
-                price = _market_money(price)
-            shop = item.get("shop_text") or item.get("shop") or item.get("seller") or "—"
-            image = item.get("image_url") or item.get("image") or ""
-            key = item.get("random_key") or item.get("id") or ""
-            url = item.get("web_client_absolute_url") or item.get("url") or (f"https://torob.com/p/{key}/" if key else f"https://torob.com/search/?query={urllib.parse.quote(query)}")
-            return {"engine": "Torob API", "title": title, "price": price, "shop": shop, "url": url, "snippet": "—", "image": image}
-    except Exception as exc:
-        print(f"Market Torob API failed: {exc}")
-    return await _market_ddg_site_search(query, "torob.com", "Torob")
-
-
-async def _market_basalam_search(query):
-    # Basalam public search endpoints are not always reachable outside Iran; try then fallback.
-    endpoints = [
-        ("https://search.basalam.com/ai-engine/api/v2.0/product/search", {"query": query}),
-        ("https://api.basalam.com/search/v2.0/product/search", {"query": query}),
-    ]
-    for url, params in endpoints:
-        try:
-            data = await _tools_get_json(url, params=params, timeout=14)
-            items = data.get("products") or data.get("result") or data.get("data") or data.get("items") or []
-            if isinstance(items, dict):
-                items = items.get("products") or items.get("items") or []
-            if items:
-                item = items[0]
-                title = item.get("title") or item.get("name") or item.get("name1") or query
-                price = item.get("price") or item.get("primary_price") or item.get("price_text") or "—"
-                if isinstance(price, (int, float)):
-                    price = _market_money(price)
-                shop = item.get("vendor_name") or (item.get("vendor") or {}).get("name") or item.get("shop") or "—"
-                image = item.get("photo") or item.get("image") or item.get("image_url") or ""
-                product_id = item.get("id") or item.get("product_id") or ""
-                link = item.get("url") or (f"https://basalam.com/p/{product_id}" if product_id else f"https://basalam.com/search?q={urllib.parse.quote(query)}")
-                return {"engine": "Basalam Search", "title": title, "price": price, "shop": shop, "url": link, "snippet": "—", "image": image}
-        except Exception as exc:
-            print(f"Market Basalam endpoint failed {url}: {exc}")
-    return await _market_ddg_site_search(query, "basalam.com", "Basalam")
-
-
-async def _market_send_product_result(app, m, title, result):
-    rows = [
-        ("Engine", result.get("engine", "—")),
-        ("Product", result.get("title", "—")),
-        ("Price", result.get("price", "—")),
-        ("Shop", result.get("shop", "—")),
-        ("Link", result.get("url", "—")),
-    ]
-    if result.get("snippet") and result.get("snippet") != "—":
-        rows.append(("Snippet", result.get("snippet")))
-    caption = _tools_box(title, rows, footer="TiTaN Market Pro")
-    image = result.get("image") or ""
-    try:
-        if image and str(image).startswith("http"):
-            await app.send_photo(m.chat.id, image, caption=caption[:1024], parse_mode=enums.ParseMode.HTML, reply_to_message_id=m.id)
-            try:
-                await m.delete()
-            except Exception:
-                pass
-        else:
-            await _tools_edit(m, caption)
-    except Exception:
-        await _tools_edit(m, caption)
-
-
-async def _market_crypto_market(symbol, vs="usd"):
-    sym = str(symbol or "").lower().strip()
-    coin_id = _MARKET_CRYPTO_SYMBOLS.get(sym, _CRYPTO_IDS.get(sym, sym))
-    data = await _tools_get_json("https://api.coingecko.com/api/v3/coins/markets", params={"vs_currency": vs, "ids": coin_id, "price_change_percentage": "24h"}, timeout=14)
-    if not data:
-        raise ValueError(f"Crypto symbol not found: {symbol}")
-    return data[0], coin_id
-
-
-@app.on_message(filters.command(["qeymat"], ".") & filters.me, group=-82)
-async def market_pro_torob(app, m: Message):
-    query = _tools_arg(m)
-    if not query:
-        await _tools_error(m, "Torob Price", "Product name is required", ".qeymat iphone 13")
-        raise StopPropagation
-    await _tools_edit(m, _tools_box("Torob Market", [("Status", "Searching…"), ("Query", query)]))
-    try:
-        result = await _market_torob_search(query)
-        await _market_send_product_result(app, m, "Torob Price Finder", result)
-    except Exception as e:
-        await _tools_error(m, "Torob Price", e, ".qeymat iphone 13")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["price"], ".") & filters.me, group=-82)
-async def market_pro_basalam(app, m: Message):
-    query = _tools_arg(m)
-    if not query:
-        await _tools_error(m, "Basalam Price", "Product name is required", ".price زعفران")
-        raise StopPropagation
-    await _tools_edit(m, _tools_box("Basalam Market", [("Status", "Searching…"), ("Query", query)]))
-    try:
-        result = await _market_basalam_search(query)
-        await _market_send_product_result(app, m, "Basalam Price Finder", result)
-    except Exception as e:
-        await _tools_error(m, "Basalam Price", e, ".price زعفران")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["cryptolist"], ".") & filters.me, group=-82)
-async def market_pro_cryptolist(app, m: Message):
-    rows = [
-        ("Major", "BTC, ETH, USDT, USDC, BNB, XRP, SOL, ADA"),
-        ("Popular", "TRX, TON, DOGE, SHIB, LTC, BCH, LINK, DOT"),
-        ("DeFi/Game", "UNI, AAVE, SAND, MANA, AXS, MATIC, AVAX"),
-        ("Usage", ".crypto btc | .crypto trx | .c 100 usdt toman"),
-    ]
-    await _tools_edit(m, _tools_box("Crypto Symbols List", rows, footer="CoinGecko + Coinbase supported"))
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["crypto"], ".") & filters.me, group=-82)
-async def market_pro_crypto(app, m: Message):
-    symbol = _tools_arg(m).lower().strip()
-    if not symbol:
-        await _tools_error(m, "Crypto Price", "Crypto symbol is required", ".crypto btc")
-        raise StopPropagation
-    await _tools_edit(m, _tools_box("Crypto Market", [("Status", "Fetching…"), ("Symbol", symbol.upper())]))
-    try:
-        item, coin_id = await _market_crypto_market(symbol, "usd")
-        toman_rate = await _crypto_toman_rate(symbol)
-        rows = [
-            ("Name", f"{item.get('name')} ({item.get('symbol', symbol).upper()})"),
-            ("USD", f"${float(item.get('current_price') or 0):,.8g}"),
-            ("Toman", f"{toman_rate:,.0f} تومان"),
-            ("24h Change", f"{float(item.get('price_change_percentage_24h') or 0):+.2f}%"),
-            ("24h High", f"${float(item.get('high_24h') or 0):,.8g}"),
-            ("24h Low", f"${float(item.get('low_24h') or 0):,.8g}"),
-            ("Market Cap", f"${float(item.get('market_cap') or 0):,.0f}"),
-            ("Rank", item.get("market_cap_rank", "—")),
-        ]
-        await _tools_edit(m, _tools_box("Premium Crypto Price", rows, footer="CoinGecko + Coinbase"))
-    except Exception as e:
-        await _tools_error(m, "Crypto Price", e, ".crypto btc")
-    raise StopPropagation
-
-
-@app.on_message(filters.command(["trx"], ".") & filters.me, group=-82)
-async def market_pro_trx(app, m: Message):
-    # Dedicated shortcut for TRON
-    try:
-        item, _ = await _market_crypto_market("trx", "usd")
-        toman_rate = await _crypto_toman_rate("trx")
-        rows = [
-            ("Name", "TRON (TRX)"),
-            ("USD", f"${float(item.get('current_price') or 0):,.8g}"),
-            ("Toman", f"{toman_rate:,.0f} تومان"),
-            ("24h Change", f"{float(item.get('price_change_percentage_24h') or 0):+.2f}%"),
-            ("24h High", f"${float(item.get('high_24h') or 0):,.8g}"),
-            ("24h Low", f"${float(item.get('low_24h') or 0):,.8g}"),
-        ]
-        await _tools_edit(m, _tools_box("TRX Live Price", rows, footer="TiTaN Market Pro"))
-    except Exception as e:
-        await _tools_error(m, "TRX Price", e, ".trx")
-    raise StopPropagation
-
-
-def _market_extract_tron_hash(text):
-    text = str(text or "").strip()
-    m = re.search(r"([A-Fa-f0-9]{64})", text)
-    return m.group(1) if m else ""
-
-
-@app.on_message(filters.command(["tara"], ".") & filters.me, group=-82)
-async def market_pro_tara(app, m: Message):
-    raw = _tools_reply_or_arg(m)
-    tx_hash = _market_extract_tron_hash(raw)
-    if not tx_hash:
-        await _tools_error(m, "TRON Transaction", "Valid 64-character transaction hash/link is required", ".tara https://tronscan.org/#/transaction/HASH")
-        raise StopPropagation
-    await _tools_edit(m, _tools_box("TRON Transaction", [("Status", "Fetching…"), ("Hash", tx_hash[:16] + "…")]))
-    try:
-        data = await _tools_get_json("https://apilist.tronscanapi.com/api/transaction-info", params={"hash": tx_hash}, timeout=16)
-        if not data or data.get("message"):
-            raise ValueError(data.get("message", "Transaction not found"))
-        status = data.get("contractRet") or ("SUCCESS" if data.get("confirmed") else "PENDING")
-        timestamp = data.get("timestamp") or data.get("block_ts") or 0
-        date_str = "—"
-        try:
-            date_str = datetime.fromtimestamp(int(timestamp)/1000).strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            pass
-        owner = "—"; to_addr = "—"; amount = "—"; token = "TRX"
-        cdata = data.get("contractData") or {}
-        if cdata:
-            owner = cdata.get("owner_address") or cdata.get("ownerAddress") or "—"
-            to_addr = cdata.get("to_address") or cdata.get("toAddress") or "—"
-            if cdata.get("amount") is not None:
-                amount = f"{float(cdata.get('amount'))/1_000_000:,.6f} TRX"
-        tinfo = data.get("tokenTransferInfo") or data.get("trc20TransferInfo") or {}
-        if isinstance(tinfo, list) and tinfo:
-            tinfo = tinfo[0]
-        if isinstance(tinfo, dict) and tinfo:
-            token = tinfo.get("symbol") or tinfo.get("tokenAbbr") or token
-            owner = tinfo.get("from_address") or tinfo.get("from") or owner
-            to_addr = tinfo.get("to_address") or tinfo.get("to") or to_addr
-            dec = int(tinfo.get("decimals") or tinfo.get("tokenDecimal") or 6)
-            val = tinfo.get("amount_str") or tinfo.get("amount") or tinfo.get("quant")
-            try:
-                amount = f"{float(val)/(10**dec):,.8g} {token}"
-            except Exception:
-                amount = f"{val} {token}"
-        fee = "—"
-        try:
-            fee_sun = (data.get("cost") or {}).get("net_fee_cost") or (data.get("cost") or {}).get("fee") or data.get("fee")
-            if fee_sun is not None:
-                fee = f"{float(fee_sun)/1_000_000:,.6f} TRX"
-        except Exception:
-            pass
-        rows = [
-            ("Status", status),
-            ("Amount", amount),
-            ("From", owner),
-            ("To", to_addr),
-            ("Fee", fee),
-            ("Time", date_str),
-            ("Confirmed", "YES" if data.get("confirmed") else "NO"),
-            ("Hash", tx_hash),
-        ]
-        await _tools_edit(m, _tools_box("Premium TRON Transaction", rows, footer="TronScan API"))
-    except Exception as e:
-        await _tools_error(m, "TRON Transaction", e, ".tara HASH_OR_LINK")
-    raise StopPropagation
-
-# ================= End Market Pro / Iran + Crypto =================
-
-
-# ================= AI Pro / MajidAPI GPT + Voice + Image v7.5 =================
-_AI_PRO_VERSION = "2026-08-22-ai-pro-majidapi-gpt35-v7-5"
-_AI_OLD_TEXT_COMMANDS = ["gpt3", "gpt4", "assist", "bard", "asq", "messi", "leo", "ronaldo", "chris", "ilon", "elon", "elonmusk", "ultra"]
-_AI_VOICES = {
-    "fa-female": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "title": "Persian Female / Dilara"},
-    "fa-male": {"edge": "fa-IR-FaridNeural", "gtts": "fa", "title": "Persian Male / Farid"},
-    "en-female": {"edge": "en-US-JennyNeural", "gtts": "en", "title": "English Female / Jenny"},
-    "en-male": {"edge": "en-US-GuyNeural", "gtts": "en", "title": "English Male / Guy"},
-    "ar-female": {"edge": "ar-SA-ZariyahNeural", "gtts": "ar", "title": "Arabic Female"},
-    "tr-female": {"edge": "tr-TR-EmelNeural", "gtts": "tr", "title": "Turkish Female"},
-}
-
-
-def _ai_data_defaults(data):
-    if not isinstance(data, dict):
-        data = {}
-    data.setdefault("ai_voice", "fa-female")
-    data.setdefault("ai_voice_format", "audio")
-    data.setdefault("ai_engine", _ai_env("NINEROUTER_MODEL", "my") if "_ai_env" in globals() else "my")
-    data.setdefault("ai_persona", _ai_env("AI_DEFAULT_PERSONA", "professional") if "_ai_env" in globals() else "professional")
-    data.setdefault("ai_memory", [])
-    data.setdefault("ai_history", [])
-    if not isinstance(data.get("ai_memory"), list):
-        data["ai_memory"] = []
-    if not isinstance(data.get("ai_history"), list):
-        data["ai_history"] = []
-    if str(data.get("ai_persona", "")).lower() not in ["developer", "teacher", "friendly", "professional"]:
-        data["ai_persona"] = "professional"
-    return data
-
-
-def _ai_save_data(data):
-    data = _ai_data_defaults(data)
-    write("data.json", json.dumps(data, ensure_ascii=False))
-
-
-def _ai_reply_or_arg(message):
-    arg = _tools_arg(message) if "_tools_arg" in globals() else ""
-    if arg:
-        return arg.strip()
-    reply = getattr(message, "reply_to_message", None)
-    if reply:
-        return (getattr(reply, "text", None) or getattr(reply, "caption", None) or "").strip()
-    return ""
-
-
-def _ai_get_replied_content(message):
-    reply = getattr(message, "reply_to_message", None)
-    if not reply:
-        return ""
-    text = (getattr(reply, "text", None) or getattr(reply, "caption", None) or "").strip()
-    if not text:
-        # Minimal media awareness; we do not download media for text AI.
-        if getattr(reply, "photo", None):
-            text = "[پیام ریپلای‌شده شامل عکس است اما متن/caption ندارد]"
-        elif getattr(reply, "voice", None):
-            text = "[پیام ریپلای‌شده شامل ویس است؛ برای تحلیل صوت ابتدا آن را به متن تبدیل کن]"
-        elif getattr(reply, "audio", None):
-            text = "[پیام ریپلای‌شده شامل فایل صوتی است اما متن ندارد]"
-        elif getattr(reply, "document", None):
-            text = "[پیام ریپلای‌شده شامل فایل است اما متن ندارد]"
-    sender = getattr(reply, "from_user", None)
-    sender_name = ""
-    try:
-        if sender:
-            sender_name = (getattr(sender, "first_name", "") or "")
-            if getattr(sender, "last_name", None):
-                sender_name += " " + sender.last_name
-            if getattr(sender, "username", None):
-                sender_name += f" (@{sender.username})"
-    except Exception:
-        sender_name = ""
-    if sender_name:
-        return f"فرستنده: {sender_name}\nمتن پیام:\n{text}".strip()
-    return text
-
-
-def _ai_is_management_prompt(arg):
-    low = str(arg or "").strip().lower()
-    if not low:
-        return False
-    return (
-        low.startswith("learn ") or low.startswith("یاد بگیر ") or
-        low in ["memory", "mem", "حافظه", "reset", "clear", "ریست", "help", "راهنما", "personas", "persona list", "شخصیت ها", "شخصیت‌ها"] or
-        low.startswith("forget") or low.startswith("فراموش") or
-        low.startswith("persona ") or low.startswith("شخصیت ")
-    )
-
-
-def _ai_prompt_from_message(message):
-    arg = (_tools_arg(message) if "_tools_arg" in globals() else "").strip()
-    replied = _ai_get_replied_content(message)
-    if replied and not _ai_is_management_prompt(arg):
-        instruction = arg or "این پیام ریپلای‌شده را بررسی کن و پاسخ مناسب، دقیق و مرتب بده."
-        return (
-            f"{instruction}\n\n"
-            "[پیام ریپلای‌شده برای بررسی]\n"
-            f"{replied}\n\n"
-            "لطفاً پاسخ را بر اساس پیام ریپلای‌شده بده، نه فقط متن دستور من."
-        ).strip()
-    return arg or replied
-
-
-def _ai_box(title, rows=None, footer="TiTaN AI Pro"):
-    return _tools_box(title, rows or [], footer=footer) if "_tools_box" in globals() else str(rows)
-
-
-async def _ai_edit(message, text):
-    if "_tools_edit" in globals():
-        return await _tools_edit(message, text)
-    try:
-        return await message.edit_text(text)
-    except Exception:
-        return await message.reply_text(text)
-
-
-async def _ai_error(message, title, error, usage=None):
-    if "_tools_error" in globals():
-        return await _tools_error(message, title, error, usage)
-    return await _ai_edit(message, f"{title}\nERROR: {error}\n{usage or ''}")
-
-
-def _ai_env(name, default=""):
-    return str(os.environ.get(name, default)).strip()
-
-
-def _ai_html(value):
-    return html.escape(str(value if value is not None else ""))
-
-
-_AI_PERSONAS = {
-    "developer": "مثل یک توسعه‌دهنده ارشد پاسخ بده: دقیق، فنی، مرحله‌ای، با مثال کد در صورت نیاز و بدون حاشیه.",
-    "teacher": "مثل یک معلم صبور پاسخ بده: ساده، آموزشی، با مثال‌های قابل فهم و توضیح مفاهیم پایه.",
-    "friendly": "با لحن دوستانه، روان و صمیمی پاسخ بده؛ اما همچنان دقیق و مفید باش.",
-    "professional": "با لحن حرفه‌ای، خلاصه، منظم و قابل استفاده پاسخ بده.",
-}
-
-_AI_MODES = {
-    "auto": "نوع درخواست را تشخیص بده و مناسب‌ترین ساختار پاسخ را انتخاب کن.",
-    "explain": "موضوع را روشن، مرحله‌ای و قابل فهم توضیح بده. اگر تفاوت یا مقایسه وجود دارد، جدول یا بولت کوتاه بده.",
-    "code": "روی کدنویسی تمرکز کن. راه‌حل عملی، کد تمیز، نکات خطا و در صورت نیاز نمونه ارائه بده.",
-    "translate": "متن را ترجمه کن. اگر زبان مقصد مشخص نیست، به فارسی روان ترجمه کن و معنی دقیق را حفظ کن.",
-    "summarize": "خلاصه‌ای دقیق، کوتاه و منظم بده. نکات کلیدی را بولت کن.",
-    "fix": "مشکل/خطا را عیب‌یابی کن، علت‌های محتمل و راه‌حل عملی بده. اگر کد هست، نسخه اصلاح‌شده را پیشنهاد کن.",
-    "better": "درخواست کاربر را بهتر بفهم، ابهام‌ها را کم کن و پاسخی دقیق‌تر، کامل‌تر و واضح‌تر بده؛ اما بی‌دلیل طولانی نکن.",
-}
-
-
-def _ai_route_model(route):
-    base = _ai_env("NINEROUTER_MODEL", "my") or "my"
-    return {
-        "fast": _ai_env("NINEROUTER_FAST_MODEL", base) or base,
-        "smart": _ai_env("NINEROUTER_SMART_MODEL", base) or base,
-        "code": _ai_env("NINEROUTER_CODE_MODEL", base) or base,
-    }.get(route, base)
-
-
-def _ai_autodetect_mode_route(prompt):
-    text = str(prompt or "").lower()
-    if any(x in text for x in ["```", "traceback", "syntaxerror", "exception", "error", "bug", "fix", "کد", "ارور", "خطا", "باگ"]):
-        return "fix", "code"
-    if any(x in text for x in ["translate", "ترجمه", "معنی کن", "به انگلیسی", "به فارسی"]):
-        return "translate", "smart"
-    if any(x in text for x in ["summarize", "summary", "خلاصه", "جمع بندی", "جمع‌بندی"]):
-        return "summarize", "fast"
-    if any(x in text for x in ["code", "function", "class", "api", "python", "javascript", "html", "css", "برنامه", "تابع"]):
-        return "code", "code"
-    if any(x in text for x in ["توضیح", "چیست", "چیه", "فرق", "تفاوت", "چرا", "how", "what", "why"]):
-        return "explain", "smart"
-    return "auto", "smart"
-
-
-def _ai_parse_request(raw_prompt, data):
-    prompt = str(raw_prompt or "").strip()
-    persona = str(data.get("ai_persona", "professional") or "professional").lower()
-    mode = "auto"
-    route = "auto"
-
-    # Slash route/model commands: .ai /fast text, .ai /smart text, .ai /code text
-    slash_routes = {"/fast": "fast", "/smart": "smart", "/code": "code"}
-    for prefix, value in slash_routes.items():
-        if prompt.lower().startswith(prefix + " "):
-            route = value
-            prompt = prompt[len(prefix):].strip()
-            break
-
-    # Slash mode commands
-    slash_modes = ["explain", "code", "translate", "summarize", "fix", "better"]
-    for m in slash_modes:
-        prefix = "/" + m
-        if prompt.lower().startswith(prefix + " "):
-            mode = m
-            prompt = prompt[len(prefix):].strip()
-            if route == "auto":
-                route = "code" if m in ["code", "fix"] else ("fast" if m == "summarize" else "smart")
-            break
-
-    # Persian route format
-    persian_routes = [
-        ("مدل سریع:", "fast"), ("مدل سریع :", "fast"),
-        ("مدل دقیق:", "smart"), ("مدل دقیق :", "smart"),
-        ("مدل کدنویسی:", "code"), ("مدل کدنویسی :", "code"),
-    ]
-    for prefix, value in persian_routes:
-        if prompt.startswith(prefix):
-            route = value
-            prompt = prompt[len(prefix):].strip()
-            break
-
-    # Persian/English mode format: explain: text / توضیح: متن
-    mode_prefixes = [
-        ("explain:", "explain"), ("code:", "code"), ("translate:", "translate"),
-        ("summarize:", "summarize"), ("fix:", "fix"), ("better:", "better"),
-        ("توضیح:", "explain"), ("کدنویسی:", "code"), ("ترجمه:", "translate"),
-        ("خلاصه:", "summarize"), ("اصلاح:", "fix"), ("بهتر:", "better"),
-    ]
-    low = prompt.lower()
-    for prefix, value in mode_prefixes:
-        if low.startswith(prefix.lower()):
-            mode = value
-            prompt = prompt[len(prefix):].strip()
-            if route == "auto":
-                route = "code" if value in ["code", "fix"] else ("fast" if value == "summarize" else "smart")
-            break
-
-    if mode == "auto" or route == "auto":
-        detected_mode, detected_route = _ai_autodetect_mode_route(prompt)
-        if mode == "auto":
-            mode = detected_mode
-        if route == "auto":
-            route = detected_route
-
-    model = _ai_route_model(route)
-    return {"prompt": prompt, "persona": persona, "mode": mode, "route": route, "model": model}
-
-
-def _ai_format_answer_html(answer, limit=2800):
-    raw = str(answer or "").strip()
-    if len(raw) > limit:
-        raw = raw[:limit].rstrip() + "\n…"
-
-    # Convert fenced code blocks to Telegram HTML <pre> blocks.
-    parts = []
-    pos = 0
-    pattern = re.compile(r"```([a-zA-Z0-9_+\-.]*)\n?(.*?)```", re.S)
-
-    def fmt_text(txt):
-        txt = str(txt or "")
-        txt = re.sub(r"^#{1,6}\s*", "", txt, flags=re.M)
-        txt = txt.replace("•", "•")
-        esc = html.escape(txt)
-        # Simple markdown cleanup after escaping.
-        esc = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", esc, flags=re.S)
-        esc = re.sub(r"`([^`\n]{1,120})`", r"<code>\1</code>", esc)
-        return esc.strip()
-
-    for m in pattern.finditer(raw):
-        before = raw[pos:m.start()]
-        if before.strip():
-            parts.append(fmt_text(before))
-        lang = (m.group(1) or "").strip()
-        code = m.group(2) or ""
-        if len(code) > 1500:
-            code = code[:1500].rstrip() + "\n…"
-        code_esc = html.escape(code.strip())
-        if lang:
-            parts.append(f"<b>Code ({html.escape(lang)}):</b>\n<pre>{code_esc}</pre>")
-        else:
-            parts.append(f"<b>Code:</b>\n<pre>{code_esc}</pre>")
-        pos = m.end()
-    tail = raw[pos:]
-    if tail.strip():
-        parts.append(fmt_text(tail))
-    if not parts:
-        return html.escape(raw)
-    return "\n\n".join(parts).strip()
-
-
-def _ai_minimal_card(question, answer, meta):
-    q = _ai_html(question[:650] + ("…" if len(str(question)) > 650 else ""))
-    a = _ai_format_answer_html(answer, limit=2850)
-    elapsed = meta.get("elapsed", 0)
-    route = _ai_html(meta.get("route", "auto"))
-    mode = _ai_html(meta.get("mode", "auto"))
-    persona = _ai_html(meta.get("persona", "professional"))
-    model = _ai_html(meta.get("model", "my"))
-    return (
-        "╭─────────────────────╮\n"
-        "│ 🤖 <b>AI Assistant</b>\n"
-        "╰─────────────────────╯\n"
-        "💬 <b>سؤال شما</b>\n"
-        f"{q}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🧠 <b>پاسخ</b>\n"
-        f"{a}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚡ TiTaN SelfSaz\n⏱ {elapsed:.1f}s • {mode}/{route} • {persona}\n"
-        f"<code>{model}</code>"
-    )
-
-
-def _ai_inline_buttons():
-    try:
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("⚡ Fast", callback_data="ai_hint_fast"), InlineKeyboardButton("🧠 Smart", callback_data="ai_hint_smart"), InlineKeyboardButton("💻 Code", callback_data="ai_hint_code")],
-            [InlineKeyboardButton("✨ Better", callback_data="ai_hint_better"), InlineKeyboardButton("🎭 Persona", callback_data="ai_hint_persona")],
-        ])
-    except Exception:
-        return None
-
-
-async def _ai_edit_markup(message, text, reply_markup=None):
-    try:
-        return await message.edit_text(text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True, reply_markup=reply_markup)
-    except Exception:
-        try:
-            return await message.edit_text(text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
-        except Exception:
-            return await _ai_edit(message, text)
-
-
-async def _ai_text_request(prompt, data, request_meta=None):
-    """Text AI via 9Router OpenAI-compatible /chat/completions.
-
-    Conversation memory/history are preserved by injecting them into the system
-    prompt. 9Router may return normal JSON, concatenated JSON, or SSE chunks;
-    the response parser below handles all of them.
-    """
-    request_meta = request_meta or {}
-    api_key = _ai_env("NINEROUTER_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("NINEROUTER_API_KEY تنظیم نشده است. کلید 9Router را در Railway Variables بگذار.")
-
-    base_url = _ai_env("NINEROUTER_BASE_URL", "https://9router-production-8331.up.railway.app/v1").rstrip("/")
-    model = request_meta.get("model") or _ai_env("NINEROUTER_MODEL", "my")
-    persona_key = request_meta.get("persona") or data.get("ai_persona", "professional")
-    mode_key = request_meta.get("mode") or "auto"
-    persona_prompt = _AI_PERSONAS.get(persona_key, _AI_PERSONAS["professional"])
-    mode_prompt = _AI_MODES.get(mode_key, _AI_MODES["auto"])
-
-    memory = data.get("ai_memory", []) if isinstance(data.get("ai_memory"), list) else []
-    history = data.get("ai_history", []) if isinstance(data.get("ai_history"), list) else []
-    memory_text = "\n".join([f"- {str(x.get('text', x))[:600]}" for x in memory[-50:]])
-
-    system_prompt = (
-        "تو دستیار هوشمند TiTaN Self هستی. پیش‌فرض فارسی، دقیق، مفید و حرفه‌ای جواب بده.\n"
-        "پاسخ‌ها را واضح و کاربردی بده؛ بی‌دلیل طولانی نکن.\n"
-        f"[Persona] {persona_key}: {persona_prompt}\n"
-        f"[Mode] {mode_key}: {mode_prompt}\n\n"
-        "از حافظه زیر به عنوان دانسته‌های پایدار کاربر استفاده کن. اگر چیزی در حافظه نبود، حدس نزن.\n\n"
-        f"[حافظه دائمی]\n{memory_text if memory_text else '- موردی ثبت نشده است.'}"
-    )
-
-    messages = [{"role": "system", "content": system_prompt}]
-    for item in history[-10:]:
-        role = item.get("role")
-        content = str(item.get("content", "")).strip()
-        if role in ["user", "assistant"] and content:
-            messages.append({"role": role, "content": content[:1200]})
-    messages.append({"role": "user", "content": prompt})
-
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": float(_ai_env("NINEROUTER_TEMPERATURE", "0.7") or 0.7),
-        "max_tokens": int(_ai_env("NINEROUTER_MAX_TOKENS", "1800") or 1800),
-        "stream": False,
-    }
-
-    def _extract_answer_from_obj(obj):
-        if isinstance(obj, str):
-            return obj.strip()
-        if isinstance(obj, dict):
-            # Standard OpenAI response
-            try:
-                msg = obj["choices"][0].get("message") or {}
-                content = msg.get("content")
-                if isinstance(content, str) and content.strip():
-                    return content.strip()
-            except Exception:
-                pass
-            # Streaming chunk response
-            try:
-                delta = obj["choices"][0].get("delta") or {}
-                content = delta.get("content")
-                if isinstance(content, str) and content.strip():
-                    return content
-            except Exception:
-                pass
-            # Common non-standard wrappers
-            for key in ["answer", "message", "result", "text", "response", "content", "reply", "data"]:
-                val = obj.get(key)
-                nested = _extract_answer_from_obj(val)
-                if nested:
-                    return nested
-        if isinstance(obj, list):
-            parts = []
-            for item in obj:
-                nested = _extract_answer_from_obj(item)
-                if nested:
-                    parts.append(nested)
-            return "".join(parts).strip()
-        return ""
-
-    def _parse_9router_response(raw_text):
-        raw = str(raw_text or "").strip()
-        if not raw:
-            return ""
-
-        # SSE format: data: {...}\n\ndata: [DONE]
-        if "data:" in raw:
-            chunks = []
-            for line in raw.splitlines():
-                line = line.strip()
-                if not line.startswith("data:"):
+                r = requests.post(
+                    base_url + "/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/event-stream, text/plain, */*",
+                    },
+                    json=cur_payload,
+                    timeout=120,
+                )
+                if r.status_code >= 400:
+                    resp_text = r.text[:900]
+                    if any(k in resp_text.lower() for k in ["429", "freeusagelimiterror", "rate limit"]):
+                        last_error = f"Rate limit on {cur_model}: {resp_text}"
+                        continue
+                    raise RuntimeError(f"9Router API {r.status_code}: {resp_text}")
+                ans = _parse_9router_response(r.text)
+                if not ans:
+                    raise RuntimeError(f"9Router پاسخ خالی/نامعتبر داد: {r.text[:700]}")
+                return ans, cur_model
+            except Exception as e:
+                err_text = str(e)
+                if any(k in err_text.lower() for k in ["429", "freeusagelimiterror", "rate limit"]) and cur_model != models_to_try[-1]:
+                    last_error = err_text
                     continue
-                payload_line = line[5:].strip()
-                if not payload_line or payload_line == "[DONE]":
-                    continue
-                try:
-                    chunks.append(json.loads(payload_line))
-                except Exception:
-                    if payload_line and not payload_line.startswith("{"):
-                        chunks.append(payload_line)
-            answer = "".join([_extract_answer_from_obj(x) for x in chunks]).strip()
-            if answer:
-                return answer
+                raise
+        if last_error:
+            raise RuntimeError(last_error)
+        raise RuntimeError("9Router پاسخ معتبری نداد.")
 
-        # Normal JSON
-        try:
-            return _extract_answer_from_obj(json.loads(raw))
-        except json.JSONDecodeError:
-            pass
-
-        # Concatenated JSON objects: {...}{...} or {...}\n{...}
-        decoder = json.JSONDecoder()
-        idx = 0
-        objects = []
-        while idx < len(raw):
-            while idx < len(raw) and raw[idx].isspace():
-                idx += 1
-            if idx >= len(raw):
-                break
-            try:
-                obj, next_idx = decoder.raw_decode(raw, idx)
-                objects.append(obj)
-                idx = next_idx
-            except json.JSONDecodeError:
-                idx += 1
-        if objects:
-            # For true streaming chunks, concatenate deltas; otherwise first full answer wins.
-            delta_answer = "".join([_extract_answer_from_obj(x) for x in objects]).strip()
-            if delta_answer:
-                return delta_answer
-
-        # Last fallback: if it is plain text, show it instead of crashing.
-        if not raw.startswith("<"):
-            return raw[:4000].strip()
-        return ""
-
-    def run():
-        r = requests.post(
-            base_url + "/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/event-stream, text/plain, */*",
-            },
-            json=payload,
-            timeout=120,
-        )
-        if r.status_code >= 400:
-            raise RuntimeError(f"9Router API {r.status_code}: {r.text[:900]}")
-        answer = _parse_9router_response(r.text)
-        if not answer:
-            raise RuntimeError(f"9Router پاسخ خالی/نامعتبر داد: {r.text[:700]}")
-        return answer
-
-    answer = await asyncio.to_thread(run)
+    answer, model = await asyncio.to_thread(run)
     history.append({"role": "user", "content": prompt, "ts": int(time.time())})
     history.append({"role": "assistant", "content": answer[:2500], "ts": int(time.time())})
     data["ai_history"] = history[-30:]
@@ -2273,7 +1214,7 @@ async def ai_pro_text_majidapi(app, m: Message):
         card = _ai_minimal_card(clean_prompt, answer, req)
         await _ai_edit_markup(m, card, reply_markup=_ai_inline_buttons())
     except Exception as e:
-        await _ai_error(m, "9Router AI", e, ".ai سلام")
+        await _ai_error(m, "9Router AI", _format_ai_error(e), ".ai سلام")
     raise StopPropagation
 
 
@@ -11700,8 +10641,15 @@ def updates(app, m:Message):
         app.send_inline_bot_result(chat_id=m.chat.id, query_id=result.query_id, result_id=result.results[0].id, reply_to_message_id=m.id)
 #_________________________Helper_____________________________________
  elif ".help" == text or "help" == text or "راهنما" == text or "پنل" == text or "panel" == text or "Help" == text or "Panel" == text:
-  bot_results = app.get_inline_bot_results(bot_id, "panel")
-  app.send_inline_bot_result(m.chat.id ,bot_results.query_id, bot_results.results[0].id)
+  try:
+   bot_results = app.get_inline_bot_results(bot_id, "panel")
+   app.send_inline_bot_result(m.chat.id ,bot_results.query_id, bot_results.results[0].id)
+   try:
+    m.delete()
+   except Exception:
+    pass
+  except Exception as e:
+   print(f"Panel inline send error: {e}")
 #______________________________app run________________________________
 scheduler = BackgroundScheduler()
 scheduler.add_job(job, "interval", seconds=5)
