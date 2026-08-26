@@ -1,3 +1,4 @@
+import re
 #============ In The Name Of God ============#
 # Source Name: Ultra Self
 # Developer: @IVGalaxy
@@ -18,7 +19,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-25-bilingual-panel-v8-2"
+FIX_VERSION = "2026-08-25-titan-bilingual-v8-3"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -3418,6 +3419,47 @@ def _titan_split_long_line(line, max_len=420):
      return parts
 
 
+
+_TITAN_FA_CMD_MAP = {
+    "ping": "پینگ", "session": "سلف", "timename": "ست تایم", "timebio": "تایم بیو",
+    "ai": "هوش", "monshi2": "منشی۲", "monshi": "منشی", "monshioff": "خاموشی منشی",
+    "weather": "آب و هوا", "azan": "اذان", "qeymat": "قیمت", "price": "قیمت باسلام",
+    "crypto": "قیمت ارز", "trx": "ترون", "tara": "تارا", "tts": "صدا", "ttsf": "صدای زن",
+    "ttsm": "صدای مرد", "pgpt": "ساخت عکس", "vc": "تغییر صدا", "pvlock": "قفل پیوی",
+    "block": "بلاک", "unblock": "آنبلاک", "locks": "قفل ها", "spam": "اسپم",
+    "fastspam": "اسپم سریع", "cancel": "لغو", "tagall": "تگ همه", "del": "حذف",
+    "down": "دانلود اینستا", "down2": "دانلود مدیا", "unsplash": "عکس رندوم",
+    "qq": "کووت", "bkp": "بکاپ", "afk": "اف کی", "unafk": "آن اف کی",
+    "invitelink": "لینک دعوت", "leaveallch": "خروج از کانال ها", "leaveallgc": "خروج از گروه ها",
+    "tiny": "کوچک کننده متن", "packinfo": "اطلاعات استیکر", "telegraph": "تلگراف",
+    "shutdown": "خاموش", "online": "آنلاین", "offline": "آفلاین", "antilog": "آنتی لاگین",
+    "love": "قلب", "setenemy": "دشمن ست", "delenemy": "حذف دشمن", "clearenemy": "پاکسازی دشمن",
+    "enemylist": "لیست دشمن", "setlove": "عشق ست", "dellove": "حذف عشق", "clearlove": "پاکسازی عشق",
+    "lovelist": "لیست عشق", "check": "استعلام شماره", "shot": "اسکرین شات",
+    "link": "کوتاه لینک", "github": "گیت هاب", "git": "گیت", "dict": "دیکشنری",
+}
+
+def _titan_localize_fa_help(raw_text):
+    text = str(raw_text or "")
+    def repl(m):
+        cmd = m.group(1).lstrip('.')
+        fa_cmd = _TITAN_FA_CMD_MAP.get(cmd.lower(), cmd)
+        return f"`{fa_cmd}`"
+    return re.sub(r"`\.([A-Za-z0-9_]+)`", repl, text)
+
+
+def _titan_language_keyboard(user_id):
+    uid = str(user_id)
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🇮🇷 فارسی", callback_data=f"persian-{uid}"),
+            InlineKeyboardButton("🇬🇧 English", callback_data=f"english-{uid}"),
+        ],
+        [
+            InlineKeyboardButton("❌ بستن / Close", callback_data=f"close1-{uid}"),
+        ]
+    ])
+
 def _titan_paginate_help_text(raw_text, title, lang="fa", body_limit=520):
      lines = []
      for line in str(raw_text or "").strip().splitlines():
@@ -3576,6 +3618,8 @@ async def _titan_show_paginated_text(client, call, text, reply_markup=None):
 async def _titan_show_help_page(client, call, lang, key, page, user_id):
      sections = _titan_help_sections()
      title, raw_text = sections[key][lang]
+     if lang == "fa":
+          raw_text = _titan_localize_fa_help(raw_text)
      pages = _titan_paginate_help_text(raw_text, title, lang=lang)
      page = max(0, min(int(page), len(pages) - 1))
      await _titan_show_paginated_text(
@@ -3597,7 +3641,7 @@ async def send_titan_panel(client, chat_id, user=None, language="fa"):
           chat_id,
           photo=titan_card_path,
           caption="زبان پنل را انتخاب کن / Choose panel language:",
-          reply_markup=_hp2_language_keyboard(user.id)
+          reply_markup=_titan_language_keyboard(user.id)
      )
 
 
@@ -3883,7 +3927,7 @@ async def answer(client, inline_query):
                try:
                     user = await client.get_users(inline_query.from_user.id)
                     lang_text = "زبان پنل را انتخاب کن / Choose panel language:"
-                    lang_markup = _hp2_language_keyboard(user.id)
+                    lang_markup = _titan_language_keyboard(user.id)
                     try:
                          cached_file_id = await _titan_cached_photo_file_id(client, user)
                          await inline_query.answer(
@@ -3924,12 +3968,14 @@ async def answer(client, inline_query):
                                    title="TiTaN SelfSaz Panel",
                                    input_message_content=InputTextMessageContent("زبان پنل را انتخاب کن / Choose panel language:"),
                                    description="Choose Persian or English panel",
-                                   reply_markup=_hp2_language_keyboard(inline_query.from_user.id)
+                                   reply_markup=_titan_language_keyboard(inline_query.from_user.id)
                               ),
                          ],
                          cache_time=1,
                          is_personal=True
                     )
+
+          
 
           
 
@@ -4044,299 +4090,9 @@ async def answer(client, inline_query):
 
 
 
-# ================= Bilingual Help Center v8.2 =================
-# Independent, deterministic panel system. It displays bilingual language selection
-# before opening the panel and provides full paginated categories in FA and EN.
-_HP2_STATE = {}  # user_id -> {lang, category, page}
-_HP2_PER_PAGE = 14
-
-_HP2_CATEGORIES = [
-    ("gp", "سراسری - شخصی", "Global - Personal"),
-    ("profile", "پروفایل", "Profile"),
-    ("downloader", "دانلودر", "Downloader"),
-    ("uploader", "آپلودر", "Uploader"),
-    ("textmode", "حالت متن", "Text Mode"),
-    ("actionmode", "حالت اکشن", "Action Mode"),
-    ("webhook", "وبهوک", "Webhook"),
-    ("locks", "قفل‌ها", "Locks"),
-    ("cronjob", "کرون جاب", "Cron Job"),
-    ("antilogin", "آنتی لاگین", "Anti Login"),
-    ("tabchi", "تبچی", "Tabchi"),
-    ("photoeditor", "ویرایشگر عکس", "Photo Editor"),
-    ("marker", "گیف و لوگو ساز", "Logo/GIF Maker"),
-    ("compiler", "کامپایلر", "Compiler"),
-    ("tools", "ابزارها", "Tools"),
-    ("account", "اکانت", "Account"),
-    ("book", "کتاب", "Book"),
-    ("fun", "سرگرمی", "Fun"),
-    ("market", "بازار", "Market"),
-    ("photogif", "استیکر - گیف", "Sticker - GIF"),
-    ("ai", "هوش مصنوعی", "AI"),
-    ("photo", "عکس", "Photo"),
-    ("music", "موزیک", "Music"),
-    ("system", "تنظیمات سیستم", "System"),
-]
-_HP2_HELP_BY_KEY = {
-    "gp": (fahelp1, enhelp1), "profile": (fahelp2, enhelp2), "downloader": (fahelp3, enhelp3),
-    "uploader": (fahelp4, enhelp4), "textmode": (fahelp5, enhelp5), "actionmode": (fahelp6, enhelp6),
-    "webhook": (fahelp7, enhelp7), "locks": (fahelp8, enhelp8), "cronjob": (fahelp9, enhelp9),
-    "antilogin": (fahelp10, enhelp10), "tabchi": (fahelp11, enhelp11), "photoeditor": (fahelp12, enhelp12),
-    "marker": (fahelp13, enhelp13), "compiler": (fahelp14, enhelp14), "tools": (fahelp15, enhelp15),
-    "account": (fahelp16, enhelp16), "book": (fahelp17, enhelp17), "fun": (fahelp18, enhelp18),
-    "market": (fahelp19, enhelp19), "photogif": (fahelp20, enhelp20), "ai": (fahelp21, enhelp21),
-    "photo": (fahelp22, enhelp22), "music": (fahelp23, enhelp23), "system": (fahelp24, enhelp24),
-}
-_HP2_FA_COMMAND_NAMES = {
-    "ping": "پینگ", "session": "سلف", "timename": "ست تایم", "ai": "هوش", "monshi2": "منشی۲",
-    "weather": "آب و هوا", "azan": "اذان", "qeymat": "قیمت", "price": "قیمت باسلام",
-    "crypto": "قیمت ارز", "tts": "صدا", "pgpt": "ساخت عکس", "help": "پنل",
-}
-
-
-def _hp2_user_ok(call, uid):
-    try:
-        return int(call.from_user.id) == int(uid)
-    except Exception:
-        return False
-
-
-def _hp2_i18n(lang, key):
-    fa = {
-        "choose": "زبان پنل را انتخاب کن:", "home_title": "مرکز راهنمای TiTaN SelfSaz", "home_desc": "یک دسته‌بندی را انتخاب کن.",
-        "back": "🔙 بازگشت", "home": "🏠 خانه", "prev": "◀️ قبلی", "next": "بعدی ▶️", "close": "✖ بستن",
-        "page": "صفحه", "category": "دسته‌بندی", "commands": "دستورات", "denied": "این پنل برای شما نیست.",
-        "change_lang": "🌐 تغییر زبان",
-    }
-    en = {
-        "choose": "Choose panel language:", "home_title": "TiTaN SelfSaz Help Center", "home_desc": "Choose a category.",
-        "back": "🔙 Back", "home": "🏠 Home", "prev": "◀️ Prev", "next": "Next ▶️", "close": "✖ Close",
-        "page": "Page", "category": "Category", "commands": "Commands", "denied": "This panel is not yours.",
-        "change_lang": "🌐 Change Language",
-    }
-    return (fa if lang == "fa" else en).get(key, key)
-
-
-def _hp2_command_display(line, lang):
-    if lang != "fa":
-        return line
-    def repl(m):
-        cmd = m.group(1).lstrip('.')
-        return f"`{_HP2_FA_COMMAND_NAMES.get(cmd, cmd)}`"
-    return re.sub(r"`\.([A-Za-z0-9_]+)`", repl, line)
-
-
-def _hp2_extract_command_entries(raw_text, lang):
-    lines = [x.rstrip() for x in str(raw_text or "").splitlines()]
-    entries = []
-    pending_desc = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or set(stripped) <= set("▬—-─ ") or stripped.startswith("**[") or stripped.startswith("**["):
-            continue
-        if "➤" in stripped or "[ `" in stripped or "[ `." in stripped:
-            desc = " ".join(pending_desc).strip(" -—")
-            cmd_line = _hp2_command_display(stripped, lang)
-            entries.append((desc, cmd_line))
-            pending_desc = []
-        else:
-            clean = stripped.replace("**", "").strip()
-            if clean and len(clean) < 140:
-                pending_desc.append(clean)
-    if not entries:
-        for line in lines:
-            line = line.strip()
-            if line:
-                entries.append(("", _hp2_command_display(line, lang)))
-    return entries
-
-
-def _hp2_category_info(key):
-    for k, fa, en in _HP2_CATEGORIES:
-        if k == key:
-            return fa, en
-    return key, key
-
-
-def _hp2_lang_help_text(key, lang):
-    fa, en = _HP2_HELP_BY_KEY.get(key, ("", ""))
-    return fa if lang == "fa" else en
-
-
-def _hp2_home_text(lang):
-    return (
-        f"╭─ {('🇮🇷' if lang == 'fa' else '🇬🇧')} <b>{_hp2_i18n(lang, 'home_title')}</b>\n"
-        f"╰─ {_hp2_i18n(lang, 'home_desc')}\n\n"
-        f"<b>{_hp2_i18n(lang, 'commands')}:</b> "
-        f"{sum(len(_hp2_extract_command_entries(_hp2_lang_help_text(k, lang), lang)) for k,_,_ in _HP2_CATEGORIES)}"
-    )
-
-
-def _hp2_home_keyboard(lang, uid):
-    rows = []
-    cats = _HP2_CATEGORIES[:]
-    for i in range(0, len(cats), 2):
-        row = []
-        for key, fa, en in cats[i:i+2]:
-            label = fa if lang == "fa" else en
-            row.append(InlineKeyboardButton(label, callback_data=f"hp2:cat:{lang}:{key}:0:{uid}"))
-        rows.append(row)
-    rows.append([
-        InlineKeyboardButton(_hp2_i18n(lang, "change_lang"), callback_data=f"hp2:lang:{uid}"),
-        InlineKeyboardButton(_hp2_i18n(lang, "close"), callback_data=f"hp2:close:{lang}:{uid}")
-    ])
-    return InlineKeyboardMarkup(rows)
-
-
-def _hp2_language_keyboard(uid):
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🇮🇷 فارسی", callback_data=f"hp2:home:fa:{uid}"),
-            InlineKeyboardButton("🇬🇧 English", callback_data=f"hp2:home:en:{uid}")
-        ],
-        [
-            InlineKeyboardButton("❌ بستن / Close", callback_data=f"hp2:close:fa:{uid}")
-        ]
-    ])
-
-
-def _hp2_category_page_text(lang, key, page):
-    raw = _hp2_lang_help_text(key, lang)
-    entries = _hp2_extract_command_entries(raw, lang)
-    total = max(1, (len(entries) + _HP2_PER_PAGE - 1) // _HP2_PER_PAGE)
-    page = max(0, min(int(page), total - 1))
-    fa_title, en_title = _hp2_category_info(key)
-    title = fa_title if lang == "fa" else en_title
-    start = page * _HP2_PER_PAGE
-    chunk = entries[start:start + _HP2_PER_PAGE]
-    lines = [f"╭─ <b>{title}</b>", f"╰─ {_hp2_i18n(lang, 'page')} {page+1}/{total}", ""]
-    for idx, (desc, cmd) in enumerate(chunk, start=start+1):
-        if desc:
-            lines.append(f"<b>{idx}.</b> {html.escape(desc)}")
-            lines.append(cmd)
-        else:
-            lines.append(f"<b>{idx}.</b> {cmd}")
-        lines.append("")
-    return "\n".join(lines).strip(), total, page
-
-
-def _hp2_category_keyboard(lang, key, page, total, uid):
-    rows = []
-    if total > 1:
-        nav = []
-        if page > 0:
-            nav.append(InlineKeyboardButton(_hp2_i18n(lang, "prev"), callback_data=f"hp2:cat:{lang}:{key}:{page-1}:{uid}"))
-        nav.append(InlineKeyboardButton(f"{page+1}/{total}", callback_data=f"hp2:noop:{lang}:{uid}"))
-        if page < total - 1:
-            nav.append(InlineKeyboardButton(_hp2_i18n(lang, "next"), callback_data=f"hp2:cat:{lang}:{key}:{page+1}:{uid}"))
-        rows.append(nav)
-    rows.append([
-        InlineKeyboardButton(_hp2_i18n(lang, "back"), callback_data=f"hp2:home:{lang}:{uid}"),
-        InlineKeyboardButton(_hp2_i18n(lang, "close"), callback_data=f"hp2:close:{lang}:{uid}"),
-    ])
-    return InlineKeyboardMarkup(rows)
-
-
-async def _hp2_edit_or_send(client, call, text, markup):
-    if getattr(call, "message", None):
-        try:
-            if getattr(call.message, "photo", None):
-                return await client.edit_message_caption(call.message.chat.id, call.message.id, caption=text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
-            return await client.edit_message_text(call.message.chat.id, call.message.id, text=text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
-        except Exception:
-            return await client.send_message(call.from_user.id, text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
-    if getattr(call, "inline_message_id", None):
-        try:
-            return await client.edit_inline_caption(call.inline_message_id, caption=text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
-        except Exception:
-            try:
-                return await client.edit_inline_text(call.inline_message_id, text=text, reply_markup=markup, parse_mode=enums.ParseMode.HTML)
-            except Exception as e:
-                print(f"HP2 edit inline failed: {e}")
-
-
-
-@app.on_callback_query(filters.regex(r"^openpanel$"), group=-20)
-async def hp2_openpanel_language(client, call):
-    AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = '{call.from_user.id}' LIMIT 1")
-    if AdminUser is None:
-        await call.answer("دسترسی غیر مجاز 🚫", show_alert=False)
-        raise StopPropagation
-    text = "زبان پنل را انتخاب کن / Choose panel language:"
-    try:
-        if getattr(call, "message", None):
-            if getattr(call.message, "photo", None):
-                await client.edit_message_caption(call.message.chat.id, call.message.id, caption=text, reply_markup=_hp2_language_keyboard(call.from_user.id))
-            else:
-                await client.edit_message_text(call.message.chat.id, call.message.id, text=text, reply_markup=_hp2_language_keyboard(call.from_user.id))
-        else:
-            await client.send_message(call.from_user.id, text, reply_markup=_hp2_language_keyboard(call.from_user.id))
-    except Exception:
-        await client.send_message(call.from_user.id, text, reply_markup=_hp2_language_keyboard(call.from_user.id))
-    await call.answer()
-    raise StopPropagation
-
-@app.on_callback_query(filters.regex(r"^hp2:"), group=-10)
-async def hp2_callback(client, call):
-    parts = (call.data or "").split(":")
-    action = parts[1] if len(parts) > 1 else ""
-    try:
-        if action == "lang":
-            uid = parts[2]
-            if not _hp2_user_ok(call, uid):
-                await call.answer(_hp2_i18n("fa", "denied"), show_alert=True)
-                raise StopPropagation
-            text = "زبان پنل را انتخاب کن / Choose panel language:"
-            await _hp2_edit_or_send(client, call, text, _hp2_language_keyboard(uid))
-            await call.answer()
-            raise StopPropagation
-        if action == "home":
-            lang, uid = parts[2], parts[3]
-            if not _hp2_user_ok(call, uid):
-                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True)
-                raise StopPropagation
-            _HP2_STATE[int(uid)] = {"lang": lang, "category": None, "page": 0}
-            await _hp2_edit_or_send(client, call, _hp2_home_text(lang), _hp2_home_keyboard(lang, uid))
-            await call.answer()
-            raise StopPropagation
-        if action == "cat":
-            lang, key, page, uid = parts[2], parts[3], int(parts[4]), parts[5]
-            if not _hp2_user_ok(call, uid):
-                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True)
-                raise StopPropagation
-            text, total, page = _hp2_category_page_text(lang, key, page)
-            _HP2_STATE[int(uid)] = {"lang": lang, "category": key, "page": page}
-            await _hp2_edit_or_send(client, call, text, _hp2_category_keyboard(lang, key, page, total, uid))
-            await call.answer()
-            raise StopPropagation
-        if action == "close":
-            lang, uid = parts[2], parts[3]
-            if not _hp2_user_ok(call, uid):
-                await call.answer(_hp2_i18n(lang, "denied"), show_alert=True)
-                raise StopPropagation
-            if getattr(call, "message", None):
-                try:
-                    await call.message.delete()
-                except Exception:
-                    await _hp2_edit_or_send(client, call, "Closed", None)
-            else:
-                await _hp2_edit_or_send(client, call, "Closed", None)
-            await call.answer()
-            raise StopPropagation
-        await call.answer("—", show_alert=False)
-        raise StopPropagation
-    except StopPropagation:
-        raise
-    except Exception as exc:
-        print(f"HP2 callback error: {exc}")
-        try:
-            await call.answer("Panel error", show_alert=True)
-        except Exception:
-            pass
-        raise StopPropagation
-
 
 @app.on_message(filters.text & filters.regex(r"(?i)^(panel|help|helper|پنل|راهنما)$"), group=-100)
-async def hp2_panel_trigger(client, message: Message):
+async def direct_panel_trigger(client, message: Message):
     AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = '{message.from_user.id}' LIMIT 1")
     if AdminUser is None:
         return
@@ -4345,10 +4101,9 @@ async def hp2_panel_trigger(client, message: Message):
         await send_titan_panel(client, message.chat.id, user=user)
     except Exception:
         text = "زبان پنل را انتخاب کن / Choose panel language:"
-        await client.send_message(message.chat.id, text, reply_markup=_hp2_language_keyboard(message.from_user.id))
+        await client.send_message(message.chat.id, text, reply_markup=_titan_language_keyboard(message.from_user.id))
     update_data(f"UPDATE user SET step = 'none' WHERE id = '{message.from_user.id}' LIMIT 1")
     raise StopPropagation
-# ================= End Bilingual Help Center v8.2 =================
 
 @app.on_callback_query()
 async def call(app, call):
