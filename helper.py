@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-25-titan-bilingual-v8-3"
+FIX_VERSION = "2026-08-25-titan-ssot-v8-4"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -3341,84 +3341,62 @@ def build_titan_panel_keyboard(user_id, language="fa"):
      return InlineKeyboardMarkup(rows)
 
 
-# ================= TITAN PAGINATED HELP =================
-# Telegram photo captions cannot hold very long help sections. Instead of
-# summarizing/removing commands, every long section is split into clean pages.
-# The TiTaN card stays as the same message; only caption/buttons change.
+# ================= TITAN UNIFIED HELP & PAGINATION ENGINE (SSOT) =================
+_PAGE_SIZE = 7
 
-def _titan_help_sections():
-     return {
-          "gp": {"fa": ("سراسری - شخصی", fahelp1), "en": ("Global - Personal", enhelp1)},
-          "profile": {"fa": ("پروفایل", fahelp2), "en": ("Profile", enhelp2)},
-          "downloader": {"fa": ("دانلودر", fahelp3), "en": ("Downloader", enhelp3)},
-          "uploader": {"fa": ("آپلودر", fahelp4), "en": ("Uploader", enhelp4)},
-          "textmode": {"fa": ("حالت متن", fahelp5), "en": ("Text Mode", enhelp5)},
-          "actionmode": {"fa": ("حالت اکشن", fahelp6), "en": ("Action Mode", enhelp6)},
-          "webhook": {"fa": ("وبهوک", fahelp7), "en": ("Webhook", enhelp7)},
-          "locks": {"fa": ("قفل ها", fahelp8), "en": ("Locks", enhelp8)},
-          "cronjob": {"fa": ("کرون جاب", fahelp9), "en": ("Cron Job", enhelp9)},
-          "antilogin": {"fa": ("آنتی لاگین", fahelp10), "en": ("Anti Login", enhelp10)},
-          "tabchi": {"fa": ("تبچی", fahelp11), "en": ("Tabchi", enhelp11)},
-          "photoeditor": {"fa": ("ویرایشگر عکس", fahelp12), "en": ("Photo Editor", enhelp12)},
-          "marker": {"fa": ("گیف و لوگو ساز", fahelp13), "en": ("Logo/GIF Maker", enhelp13)},
-          "compiler": {"fa": ("کامپایلر", fahelp14), "en": ("Compiler", enhelp14)},
-          "tools": {"fa": ("ابزار ها", fahelp15), "en": ("Tools", enhelp15)},
-          "account": {"fa": ("اکانت", fahelp16), "en": ("Account", enhelp16)},
-          "book": {"fa": ("کتاب", fahelp17), "en": ("Book", enhelp17)},
-          "fun": {"fa": ("سرگرمی", fahelp18), "en": ("Fun", enhelp18)},
-          "market": {"fa": ("بازار", fahelp19), "en": ("Market", enhelp19)},
-          "photogif": {"fa": ("استیکر - گیف", fahelp20), "en": ("Sticker - GIF", enhelp20)},
-          "ai": {"fa": ("هوش مصنوعی", fahelp21), "en": ("AI", enhelp21)},
-          "photo": {"fa": ("عکس", fahelp22), "en": ("Photo", enhelp22)},
-          "music": {"fa": ("موزیک", fahelp23), "en": ("Music", enhelp23)},
-          "system": {"fa": ("تنظیمات سیستم", fahelp24), "en": ("System", enhelp24)},
-     }
-
+_TITAN_CATEGORIES = [
+    ("gp", "سراسری - شخصی", "Global - Personal"),
+    ("profile", "پروفایل", "Profile"),
+    ("downloader", "دانلودر", "Downloader"),
+    ("uploader", "آپلودر", "Uploader"),
+    ("textmode", "حالت متن", "Text Mode"),
+    ("actionmode", "حالت اکشن", "Action Mode"),
+    ("webhook", "وبهوک", "Webhook"),
+    ("locks", "قفل ها", "Locks"),
+    ("cronjob", "کرون جاب", "Cron Job"),
+    ("antilogin", "آنتی لاگین", "Anti Login"),
+    ("tabchi", "تبچی", "Tabchi"),
+    ("photoeditor", "ویرایشگر عکس", "Photo Editor"),
+    ("marker", "گیف و لوگو ساز", "Logo/GIF Maker"),
+    ("compiler", "کامپایلر", "Compiler"),
+    ("tools", "ابزار ها", "Tools"),
+    ("account", "اکانت", "Account"),
+    ("book", "کتاب", "Book"),
+    ("fun", "سرگرمی", "Fun"),
+    ("market", "بازار", "Market"),
+    ("photogif", "استیکر - گیف", "Sticker - GIF"),
+    ("ai", "هوش مصنوعی", "AI"),
+    ("photo", "عکس", "Photo"),
+    ("music", "موزیک", "Music"),
+    ("system", "تنظیمات سیستم", "System"),
+]
 
 _TITAN_HELP_ACTIONS = {
-     "global_person1": ("fa", "gp"), "global_person2": ("en", "gp"),
-     "profile1": ("fa", "profile"), "profile2": ("en", "profile"),
-     "downloader1": ("fa", "downloader"), "downloader2": ("en", "downloader"),
-     "uploader1": ("fa", "uploader"), "uploader2": ("en", "uploader"),
-     "text_mode1": ("fa", "textmode"), "text_mode2": ("en", "textmode"),
-     "action_mode1": ("fa", "actionmode"), "action_mode2": ("en", "actionmode"),
-     "webhook1": ("fa", "webhook"), "webhook2": ("en", "webhook"),
-     "locks1": ("fa", "locks"), "locks2": ("en", "locks"),
-     "cronjob1": ("fa", "cronjob"), "cronjob2": ("en", "cronjob"),
-     "antilogin1": ("fa", "antilogin"), "antilogin2": ("en", "antilogin"),
-     "tabchi1": ("fa", "tabchi"), "tabchi2": ("en", "tabchi"),
-     "photo_editor1": ("fa", "photoeditor"), "photo_editor2": ("en", "photoeditor"),
-     "marker1": ("fa", "marker"), "marker2": ("en", "marker"),
-     "compiler1": ("fa", "compiler"), "compiler2": ("en", "compiler"),
-     "tools1": ("fa", "tools"), "tools2": ("en", "tools"),
-     "account1": ("fa", "account"), "account2": ("en", "account"),
-     "book1": ("fa", "book"), "book2": ("en", "book"),
-     "fun1": ("fa", "fun"), "fun2": ("en", "fun"),
-     "market1": ("fa", "market"), "market2": ("en", "market"),
-     "photo_gif1": ("fa", "photogif"), "photo_gif2": ("en", "photogif"),
-     "ai1": ("fa", "ai"), "ai2": ("en", "ai"),
-     "photo1": ("fa", "photo"), "photo2": ("en", "photo"),
-     "music1": ("fa", "music"), "music2": ("en", "music"),
-     "system1": ("fa", "system"), "system2": ("en", "system"),
+    "global_person1": ("fa", "gp"), "global_person2": ("en", "gp"),
+    "profile1": ("fa", "profile"), "profile2": ("en", "profile"),
+    "downloader1": ("fa", "downloader"), "downloader2": ("en", "downloader"),
+    "uploader1": ("fa", "uploader"), "uploader2": ("en", "uploader"),
+    "text_mode1": ("fa", "textmode"), "text_mode2": ("en", "textmode"),
+    "action_mode1": ("fa", "actionmode"), "action_mode2": ("en", "actionmode"),
+    "webhook1": ("fa", "webhook"), "webhook2": ("en", "webhook"),
+    "locks1": ("fa", "locks"), "locks2": ("en", "locks"),
+    "cronjob1": ("fa", "cronjob"), "cronjob2": ("en", "cronjob"),
+    "antilogin1": ("fa", "antilogin"), "antilogin2": ("en", "antilogin"),
+    "tabchi1": ("fa", "tabchi"), "tabchi2": ("en", "tabchi"),
+    "photo_editor1": ("fa", "photoeditor"), "photo_editor2": ("en", "photoeditor"),
+    "marker1": ("fa", "marker"), "marker2": ("en", "marker"),
+    "compiler1": ("fa", "compiler"), "compiler2": ("en", "compiler"),
+    "tools1": ("fa", "tools"), "tools2": ("en", "tools"),
+    "account1": ("fa", "account"), "account2": ("en", "account"),
+    "book1": ("fa", "book"), "book2": ("en", "book"),
+    "fun1": ("fa", "fun"), "fun2": ("en", "fun"),
+    "market1": ("fa", "market"), "market2": ("en", "market"),
+    "photo_gif1": ("fa", "photogif"), "photo_gif2": ("en", "photogif"),
+    "ai1": ("fa", "ai"), "ai2": ("en", "ai"),
+    "photo1": ("fa", "photo"), "photo2": ("en", "photo"),
+    "music1": ("fa", "music"), "music2": ("en", "music"),
+    "system1": ("fa", "system"), "system2": ("en", "system"),
 }
-
-
-def _titan_split_long_line(line, max_len=420):
-     line = str(line)
-     if len(line) <= max_len:
-          return [line]
-     parts = []
-     while len(line) > max_len:
-          cut = line.rfind(" ", 0, max_len)
-          if cut < max_len // 2:
-               cut = max_len
-          parts.append(line[:cut].rstrip())
-          line = line[cut:].lstrip()
-     if line:
-          parts.append(line)
-     return parts
-
-
 
 _TITAN_FA_CMD_MAP = {
     "ping": "پینگ", "session": "سلف", "timename": "ست تایم", "timebio": "تایم بیو",
@@ -3437,15 +3415,125 @@ _TITAN_FA_CMD_MAP = {
     "enemylist": "لیست دشمن", "setlove": "عشق ست", "dellove": "حذف عشق", "clearlove": "پاکسازی عشق",
     "lovelist": "لیست عشق", "check": "استعلام شماره", "shot": "اسکرین شات",
     "link": "کوتاه لینک", "github": "گیت هاب", "git": "گیت", "dict": "دیکشنری",
+    "mute": "سکوت کاربر", "unmute": "حذف سکوت کاربر", "allunmute": "پاکسازی لیست سکوت",
+    "bold": "حالت بولد", "spoiler": "حالت اسپویلر", "italic": "حالت کج نویس",
+    "font": "فونت", "underline": "خط زیرین", "strike": "خط روی متن",
 }
 
-def _titan_localize_fa_help(raw_text):
-    text = str(raw_text or "")
-    def repl(m):
-        cmd = m.group(1).lstrip('.')
-        fa_cmd = _TITAN_FA_CMD_MAP.get(cmd.lower(), cmd)
-        return f"`{fa_cmd}`"
-    return re.sub(r"`\.([A-Za-z0-9_]+)`", repl, text)
+def _titan_parse_help_items(raw_text, lang="fa"):
+    lines = [l.strip() for l in str(raw_text or "").splitlines() if l.strip()]
+    items = []
+    current_desc = []
+    for l in lines:
+        if set(l) <= set("▬—-─ ") or l.startswith("**["):
+            continue
+        if "➤" in l or "[ `" in l or "[`." in l or "[." in l:
+            desc = " ".join(current_desc).strip()
+            cmd_line = l
+            if lang == "fa":
+                def repl(m):
+                    c = m.group(1).lstrip(".")
+                    fa_c = _TITAN_FA_CMD_MAP.get(c.lower(), c)
+                    return f"`{fa_c}` یا `.{c}`"
+                cmd_line = re.sub(r"`\.([A-Za-z0-9_]+)`", repl, cmd_line)
+            items.append((desc, cmd_line))
+            current_desc = []
+        else:
+            clean = l.replace("**", "").replace("`", "").strip()
+            if clean and len(clean) < 140:
+                current_desc.append(clean)
+    if not items and lines:
+        for l in lines:
+            if not (set(l) <= set("▬—-─ ") or l.startswith("**[")):
+                items.append(("", l))
+    return items
+
+def _titan_get_registry():
+    global _COMMAND_REGISTRY_CACHE
+    if "_COMMAND_REGISTRY_CACHE" in globals() and _COMMAND_REGISTRY_CACHE:
+        return _COMMAND_REGISTRY_CACHE
+    registry = {}
+    for idx, (cat_key, fa_title, en_title) in enumerate(_TITAN_CATEGORIES, start=1):
+        fa_raw = globals().get(f"fahelp{idx}", "")
+        en_raw = globals().get(f"enhelp{idx}", "")
+        registry[cat_key] = {
+            "fa_title": fa_title,
+            "en_title": en_title,
+            "fa_items": _titan_parse_help_items(fa_raw, "fa"),
+            "en_items": _titan_parse_help_items(en_raw, "en"),
+        }
+    _COMMAND_REGISTRY_CACHE = registry
+    return registry
+
+_COMMAND_REGISTRY_CACHE = None
+
+def _titan_render_help_page(lang, cat_key, page):
+    reg = _titan_get_registry()
+    cat_data = reg.get(cat_key, {"fa_title": cat_key, "en_title": cat_key, "fa_items": [], "en_items": []})
+    items = cat_data["fa_items"] if lang == "fa" else cat_data["en_items"]
+    title = cat_data["fa_title"] if lang == "fa" else cat_data["en_title"]
+    total_pages = max(1, (len(items) + _PAGE_SIZE - 1) // _PAGE_SIZE)
+    page = max(0, min(int(page), total_pages - 1))
+    start = page * _PAGE_SIZE
+    chunk = items[start:start + _PAGE_SIZE]
+
+    lines = []
+    if lang == "fa":
+        lines.append("╭━━━ ⚡ TiTaN Help Center ━━━╮")
+        lines.append(f"┃ بخش: {title}")
+        lines.append(f"┃ صفحه: {page+1} از {total_pages} (تعداد دستورات: {len(items)})")
+        lines.append("╰━━━━━━━━━━━━━━━━━━━━━━╯\n")
+        for i, (desc, cmd) in enumerate(chunk, start=start+1):
+            if desc:
+                lines.append(f"<b>{i}.</b> {desc}\n{cmd}")
+            else:
+                lines.append(f"<b>{i}.</b> {cmd}")
+            lines.append("━━━━━━━━━━━━━━")
+    else:
+        lines.append("╭━━━ ⚡ TiTaN Help Center ━━━╮")
+        lines.append(f"┃ Section: {title}")
+        lines.append(f"┃ Page: {page+1}/{total_pages} (Total: {len(items)})")
+        lines.append("╰━━━━━━━━━━━━━━━━━━━━━━╯\n")
+        for i, (desc, cmd) in enumerate(chunk, start=start+1):
+            if desc:
+                lines.append(f"<b>{i}.</b> {desc}\n{cmd}")
+            else:
+                lines.append(f"<b>{i}.</b> {cmd}")
+            lines.append("━━━━━━━━━━━━━━")
+    return "\n".join(lines).rstrip("━\n "), total_pages, page
+
+
+def _titan_paginated_keyboard(lang, key, page, total, user_id):
+    uid = str(user_id)
+    rows = []
+    if total > 1:
+        prev_cb = f"hpg-{lang}-{key}-{page-1}-{uid}" if page > 0 else "outside"
+        next_cb = f"hpg-{lang}-{key}-{page+1}-{uid}" if page < total - 1 else "outside"
+        if lang == "fa":
+            rows.append([
+                InlineKeyboardButton("⬅ قبلی", callback_data=prev_cb),
+                InlineKeyboardButton(f"{page+1}/{total}", callback_data="outside"),
+                InlineKeyboardButton("بعدی ➡", callback_data=next_cb),
+            ])
+        else:
+            rows.append([
+                InlineKeyboardButton("⬅ Prev", callback_data=prev_cb),
+                InlineKeyboardButton(f"{page+1}/{total}", callback_data="outside"),
+                InlineKeyboardButton("Next ➡", callback_data=next_cb),
+            ])
+    back_cb = f"back1-{uid}" if lang == "fa" else f"back2-{uid}"
+    close_cb = f"close1-{uid}" if lang == "fa" else f"close2-{uid}"
+    if lang == "fa":
+        rows.append([
+            InlineKeyboardButton("🔙 بازگشت", callback_data=back_cb),
+            InlineKeyboardButton("✖ بستن پنل", callback_data=close_cb),
+        ])
+    else:
+        rows.append([
+            InlineKeyboardButton("🔙 Back", callback_data=back_cb),
+            InlineKeyboardButton("✖ Close", callback_data=close_cb),
+        ])
+    return InlineKeyboardMarkup(rows)
 
 
 def _titan_language_keyboard(user_id):
@@ -3456,639 +3544,169 @@ def _titan_language_keyboard(user_id):
             InlineKeyboardButton("🇬🇧 English", callback_data=f"english-{uid}"),
         ],
         [
-            InlineKeyboardButton("❌ بستن / Close", callback_data=f"close1-{uid}"),
+            InlineKeyboardButton("✖ بستن / Close", callback_data=f"close1-{uid}"),
         ]
     ])
 
-def _titan_paginate_help_text(raw_text, title, lang="fa", body_limit=520):
-     lines = []
-     for line in str(raw_text or "").strip().splitlines():
-          for part in _titan_split_long_line(line.rstrip(), 420):
-               lines.append(part)
-     chunks, current, current_len = [], [], 0
-     for line in lines:
-          add_len = len(line) + 1
-          if current and current_len + add_len > body_limit:
-               chunks.append("\n".join(current).rstrip())
-               current, current_len = [], 0
-          current.append(line)
-          current_len += add_len
-     if current:
-          chunks.append("\n".join(current).rstrip())
-     if not chunks:
-          chunks = ["—"]
-
-     total = len(chunks)
-     pages = []
-     for index, chunk in enumerate(chunks, start=1):
-          if lang == "fa":
-               header = f"╭━━━ ⚡ TiTaN Help Center ━━━╮\n┃ بخش: {title}\n┃ صفحه: {index} از {total}\n╰━━━━━━━━━━━━━━━━━━━━━━╯"
-               footer = "━━━━━━━━━━━━━━\nبرای ادامه از دکمه‌های صفحه‌بندی استفاده کن."
-          else:
-               header = f"╭━━━ ⚡ TiTaN Help Center ━━━╮\n┃ Section: {title}\n┃ Page: {index}/{total}\n╰━━━━━━━━━━━━━━━━━━━━━━╯"
-               footer = "━━━━━━━━━━━━━━\nUse pagination buttons to continue."
-          page = f"{header}\n\n{chunk}\n\n{footer}"
-          # Absolute safety: if decorative header made it too long, shrink body further.
-          if len(page) > 950:
-               overflow = len(page) - 950
-               safe_chunk = chunk[:-overflow-5].rstrip() + "\n…"
-               page = f"{header}\n\n{safe_chunk}\n\n{footer}"
-          pages.append(page)
-     return pages
-
-
-def _titan_paginated_keyboard(lang, key, page, total, user_id):
-     uid = str(user_id)
-     rows = []
-     if total > 1:
-          prev_cb = f"hpg-{lang}-{key}-{page-1}-{uid}" if page > 0 else "outside"
-          next_cb = f"hpg-{lang}-{key}-{page+1}-{uid}" if page < total - 1 else "outside"
-          if lang == "fa":
-               rows.append([
-                    InlineKeyboardButton("⬅ قبلی", callback_data=prev_cb),
-                    InlineKeyboardButton(f"{page+1}/{total}", callback_data="outside"),
-                    InlineKeyboardButton("بعدی ➡", callback_data=next_cb),
-               ])
-          else:
-               rows.append([
-                    InlineKeyboardButton("⬅ Prev", callback_data=prev_cb),
-                    InlineKeyboardButton(f"{page+1}/{total}", callback_data="outside"),
-                    InlineKeyboardButton("Next ➡", callback_data=next_cb),
-               ])
-     back_cb = f"back1-{uid}" if lang == "fa" else f"back2-{uid}"
-     close_cb = f"close1-{uid}" if lang == "fa" else f"close2-{uid}"
-     if lang == "fa":
-          rows.append([
-               InlineKeyboardButton("🔙 بازگشت", callback_data=back_cb),
-               InlineKeyboardButton("✖ بستن پنل", callback_data=close_cb),
-          ])
-     else:
-          rows.append([
-               InlineKeyboardButton("🔙 Back", callback_data=back_cb),
-               InlineKeyboardButton("✖ Close", callback_data=close_cb),
-          ])
-     return InlineKeyboardMarkup(rows)
-
 
 async def _titan_plain_edit_kwargs():
-     """Disable parsing for help pages so broken Markdown in old help text never hides commands."""
-     try:
-          return {"parse_mode": enums.ParseMode.DISABLED}
-     except Exception:
-          return {"parse_mode": None}
+    try:
+        return {"parse_mode": enums.ParseMode.HTML}
+    except Exception:
+        return {"parse_mode": None}
 
 
 async def _titan_show_paginated_text(client, call, text, reply_markup=None):
-     """Robust renderer for paginated help pages.
+    full_text = str(text or "")
+    if len(full_text) > 950:
+        full_text = full_text[:920].rstrip() + "\n…"
+    plain_kwargs = await _titan_plain_edit_kwargs()
 
-     Important: never show the old 'caption limit' fallback. Each page is already
-     short enough, so if caption edit fails we try text edit/send using parse_mode
-     disabled. This keeps commands visible instead of replacing them with an error.
-     """
-     full_text = str(text or "")
-     # Final absolute safety for Telegram caption limit.
-     if len(full_text) > 900:
-          full_text = full_text[:870].rstrip() + "\n…"
-     plain_kwargs = await _titan_plain_edit_kwargs()
-
-     if getattr(call, "inline_message_id", None):
-          # Inline result may be photo or article. Try both edit APIs.
-          try:
-               return await client.edit_inline_caption(
+    if getattr(call, "inline_message_id", None):
+        try:
+            return await client.edit_inline_caption(
+                inline_message_id=call.inline_message_id,
+                caption=full_text,
+                reply_markup=reply_markup,
+                **plain_kwargs,
+            )
+        except Exception:
+            try:
+                return await client.edit_inline_text(
                     inline_message_id=call.inline_message_id,
+                    text=full_text,
+                    reply_markup=reply_markup,
+                    **plain_kwargs,
+                )
+            except Exception as e:
+                print(f"TITAN inline edit error: {e}")
+                return
+
+    if getattr(call, "message", None):
+        if getattr(call.message, "photo", None):
+            try:
+                return await client.edit_message_caption(
+                    call.message.chat.id,
+                    call.message.id,
                     caption=full_text,
                     reply_markup=reply_markup,
                     **plain_kwargs,
-               )
-          except Exception as cap_exc:
-               try:
-                    return await client.edit_inline_text(
-                         inline_message_id=call.inline_message_id,
-                         text=full_text,
-                         reply_markup=reply_markup,
-                         **plain_kwargs,
-                    )
-               except Exception as txt_exc:
-                    print(f"{Fore.YELLOW}TITAN paginated inline edit failed: caption={cap_exc} text={txt_exc}{Fore.RESET}")
-                    try:
-                         await call.answer("برای نمایش کامل، پنل را داخل پیوی Helper باز کن.", show_alert=True)
-                    except Exception:
-                         pass
-                    return
-
-     if getattr(call, "message", None):
-          if getattr(call.message, "photo", None):
-               try:
-                    return await client.edit_message_caption(
-                         call.message.chat.id,
-                         call.message.id,
-                         caption=full_text,
-                         reply_markup=reply_markup,
-                         **plain_kwargs,
-                    )
-               except Exception as cap_exc:
-                    print(f"{Fore.YELLOW}TITAN paginated caption edit failed, switching to text: {cap_exc}{Fore.RESET}")
-                    try:
-                         await call.message.delete()
-                    except Exception:
-                         pass
-                    return await client.send_message(
-                         call.message.chat.id,
-                         full_text,
-                         reply_markup=reply_markup,
-                         **plain_kwargs,
-                    )
-          try:
-               return await client.edit_message_text(
-                    call.message.chat.id,
-                    call.message.id,
-                    text=full_text,
-                    reply_markup=reply_markup,
-                    **plain_kwargs,
-               )
-          except Exception:
-               return await client.send_message(
+                )
+            except Exception:
+                try:
+                    await call.message.delete()
+                except Exception:
+                    pass
+                return await client.send_message(
                     call.message.chat.id,
                     full_text,
                     reply_markup=reply_markup,
                     **plain_kwargs,
-               )
+                )
+        try:
+            return await client.edit_message_text(
+                call.message.chat.id,
+                call.message.id,
+                text=full_text,
+                reply_markup=reply_markup,
+                **plain_kwargs,
+            )
+        except Exception:
+            return await client.send_message(
+                call.message.chat.id,
+                full_text,
+                reply_markup=reply_markup,
+                **plain_kwargs,
+            )
 
 
 async def _titan_show_help_page(client, call, lang, key, page, user_id):
-     sections = _titan_help_sections()
-     title, raw_text = sections[key][lang]
-     if lang == "fa":
-          raw_text = _titan_localize_fa_help(raw_text)
-     pages = _titan_paginate_help_text(raw_text, title, lang=lang)
-     page = max(0, min(int(page), len(pages) - 1))
-     await _titan_show_paginated_text(
-          client,
-          call,
-          text=pages[page],
-          reply_markup=_titan_paginated_keyboard(lang, key, page, len(pages), user_id)
-     )
+    text, total_pages, page = _titan_render_help_page(lang, key, page)
+    await _titan_show_paginated_text(
+        client,
+        call,
+        text=text,
+        reply_markup=_titan_paginated_keyboard(lang, key, page, total_pages, user_id)
+    )
 
 
 async def send_titan_panel(client, chat_id, user=None, language="fa"):
-     """Generate a fresh Titan card and show language choice before panel."""
-     if user is None:
-          user = await client.get_users(chat_id)
+    """Generate a fresh Titan card and show language choice before panel."""
+    if user is None:
+        user = await client.get_users(chat_id)
 
-     titan_card_path = await render_titan_user_card_cached(client, user)
+    titan_card_path = await render_titan_user_card_cached(client, user)
 
-     await client.send_photo(
-          chat_id,
-          photo=titan_card_path,
-          caption="زبان پنل را انتخاب کن / Choose panel language:",
-          reply_markup=_titan_language_keyboard(user.id)
-     )
+    await client.send_photo(
+        chat_id,
+        photo=titan_card_path,
+        caption="زبان پنل را انتخاب کن / Choose panel language:",
+        reply_markup=_titan_language_keyboard(user.id)
+    )
 
 
 def _titan_caption_safe(text):
-     """Return text if it fits Telegram photo caption limit, otherwise None."""
-     text = str(text or "")
-     return text if len(text) <= 950 else None
+    text = str(text or "")
+    return text if len(text) <= 950 else None
 
 
 async def _titan_edit_inline_or_chat(client, call, text, reply_markup=None):
-     """Show panel sections WITHOUT summarizing their content.
-
-     Telegram photo captions have a hard limit (~1024 chars). Therefore:
-     - Short section text: edit the card photo caption, card stays visible.
-     - Long section text: delete the photo message and send the FULL original
-       text message with the existing buttons. No features are summarized.
-     - Normal text messages: edit with full text.
-     - Inline messages: try full text first for long sections; if Telegram does
-       not allow converting media to text, fall back to full caption only when it fits.
-     """
-     full_text = str(text or "")
-     caption_text = _titan_caption_safe(full_text)
-
-     if call.inline_message_id:
-          if caption_text is not None:
-               try:
-                    return await client.edit_inline_caption(
-                         inline_message_id=call.inline_message_id,
-                         caption=caption_text,
-                         reply_markup=reply_markup
-                    )
-               except Exception:
-                    pass
-          # For long inline sections, attempt to convert to full text.
-          # This is the only way to avoid losing commands due to caption limit.
-          try:
-               return await client.edit_inline_text(
-                    inline_message_id=call.inline_message_id,
-                    text=full_text,
-                    reply_markup=reply_markup
-               )
-          except Exception:
-               # Last safe fallback: show the beginning of the real content, never a fake error.
-               fallback = full_text[:900].rstrip() + ("\n…" if len(full_text) > 900 else "")
-               try:
-                    return await client.edit_inline_caption(
-                         inline_message_id=call.inline_message_id,
-                         caption=fallback,
-                         reply_markup=reply_markup
-                    )
-               except Exception:
-                    return await client.edit_inline_text(
-                         inline_message_id=call.inline_message_id,
-                         text=fallback,
-                         reply_markup=reply_markup
-                    )
-
-     if call.message:
-          if getattr(call.message, "photo", None):
-               if caption_text is not None:
-                    return await client.edit_message_caption(
-                         call.message.chat.id,
-                         call.message.id,
-                         caption=caption_text,
-                         reply_markup=reply_markup
-                    )
-               # Long section: remove the card photo and show complete text like the original panel.
-               try:
-                    await call.message.delete()
-               except Exception:
-                    pass
-               return await client.send_message(
-                    call.message.chat.id,
-                    full_text,
-                    reply_markup=reply_markup
-               )
-
-          return await client.edit_message_text(
-               call.message.chat.id,
-               call.message.id,
-               text=full_text,
-               reply_markup=reply_markup
-          )
-
-
+    return await _titan_show_paginated_text(client, call, text, reply_markup=reply_markup)
 
 
 def _monshi2_helper_panel_text(lang="fa", section="main"):
-     if lang == "en":
-          texts = {
-               "main": """**Monshi2 Pro Management**\n\nThis helper panel shows ready-to-copy commands. Actual Monshi2 settings are stored inside the running self account, so run these commands in your self account chat/Saved Messages.\n\nChoose a section below:""",
-               "config": """**Monshi2 Core Settings**\n\n` .monshi2 on `\n` .monshi2 off `\n` .monshi2 joinbot @sefer_bottestbot `\n` .monshi2 cooldown 60 `\n` .monshi2 deletesuccess on `\n` .monshi2 list `\n` .monshi2 test `""",
-               "links": """**Channels / Groups**\n\n` .monshi2 addchannel @channel Title `\n` .monshi2 delchannel @channel `\n` .monshi2 addgroup @group Title `\n` .monshi2 delgroup @group `\n` .monshi2 addlink https://t.me/username `\n` .monshi2 dellink @username `""",
-               "text": """**Text / Photo**\n\n` .monshi2 text Your custom forced join text `\n` .monshi2 notjoinedtext You have not joined all channels yet `\n` .monshi2 successtext Membership verified `\n\nReply to a photo:\n` .monshi2 setphoto `\n` .monshi2 delphoto `""",
-               "users": """**Per-user Leveling**\n\n` .monshi2 user on @user `\n` .monshi2 user off @user `\n` .monshi2 user del @user `\n` .monshi2 users `\n\nWorks by reply too.""",
-               "stats": """**Stats**\n\n` .monshi2 stats `\n` .monshi2 clearstats `\n\nStats include blocked PV messages, panels sent, cooldown skipped, verify success/failed, and deleted panels.""",
-          }
-     else:
-          texts = {
-               "main": """**پنل مدیریت Monshi2 Pro**\n\nاین پنل، دستورهای آماده‌ی مدیریت را نشان می‌دهد. تنظیمات واقعی Monshi2 داخل خود self ذخیره می‌شود؛ پس دستورها را داخل اکانت سلف/Saved Messages اجرا کن.\n\nیک بخش را انتخاب کن:""",
-               "config": """**تنظیمات اصلی Monshi2**\n\n` .monshi2 on `\n` .monshi2 off `\n` .monshi2 joinbot @sefer_bottestbot `\n` .monshi2 cooldown 60 `\n` .monshi2 deletesuccess on `\n` .monshi2 list `\n` .monshi2 test `""",
-               "links": """**کانال‌ها و گروه‌ها**\n\n` .monshi2 addchannel @channel Title `\n` .monshi2 delchannel @channel `\n` .monshi2 addgroup @group Title `\n` .monshi2 delgroup @group `\n` .monshi2 addlink https://t.me/username `\n` .monshi2 dellink @username `""",
-               "text": """**متن و عکس**\n\n` .monshi2 text متن دلخواه جوین اجباری `\n` .monshi2 notjoinedtext شما هنوز کامل جوین چنل ها نشده اید `\n` .monshi2 successtext عضویت شما تأیید شد `\n\nروی عکس ریپلای کن:\n` .monshi2 setphoto `\n` .monshi2 delphoto `""",
-               "users": """**سطح‌بندی کاربران**\n\n` .monshi2 user on @user `\n` .monshi2 user off @user `\n` .monshi2 user del @user `\n` .monshi2 users `\n\nبا ریپلای هم کار می‌کند.""",
-               "stats": """**آمار جوین اجباری**\n\n` .monshi2 stats `\n` .monshi2 clearstats `\n\nآمار شامل پیام‌های حذف‌شده پیوی، پنل‌های ارسال‌شده، ضداسپم، تأیید موفق/ناموفق و پنل‌های حذف‌شده است.""",
-          }
-     return texts.get(section, texts["main"])
+    if lang == "en":
+        texts = {
+            "main": """**Monshi2 Pro Management**\n\nThis helper panel shows ready-to-copy commands. Actual Monshi2 settings are stored inside the running self account.\n\n• Main Switch: `.monshi2 on` / `.monshi2 off`\n• Mode Switch: `.monshi2 mode photo` / `text` / `user`\n• Test Verification: `.monshi2 test`\n• Settings Status: `.monshi2`""",
+            "config": """**Monshi2 Pro Config Guide**\n\n• Cooldown: `.monshi2 cooldown 60`\n• Auto Delete Card: `.monshi2 delete on/off`\n• Block Non-Members: `.monshi2 block on/off`\n• Allowed Channels: `.monshi2 allow @ch1 @ch2`""",
+            "links": """**Monshi2 Pro Links Guide**\n\n• Set Primary Channel: `.monshi2 link @channel`\n• Set Channel + Link: `.monshi2 link @channel https://t.me/invite`\n• View Links: `.monshi2 links`""",
+            "text": """**Monshi2 Pro Text / Template**\n\n• Set Custom Text: `.monshi2 settext Your text`\n• Preview Text: `.monshi2 text`\n• Reset Default: `.monshi2 resettext`""",
+            "users": """**Monshi2 Pro User Management**\n\n• Whitelist User: `.monshi2 user 12345678`\n• Remove User: `.monshi2 deluser 12345678`\n• User List: `.monshi2 users`""",
+            "stats": """**Monshi2 Pro Stats**\n\nUse `.monshi2 stats` inside self chat to view detailed operational counters.\n\nStats include blocked PV messages, panels sent, cooldown skipped, verify success/failed, and deleted panels.""",
+        }
+    else:
+        texts = {
+            "main": """**پنل مدیریت Monshi2 Pro**\n\nاین بخش دستورات آماده کپی را نمایش می‌دهد. تنظیمات اصلی داخل اکانت سلف فعال و ذخیره می‌شوند.\n\n• سوئیچ اصلی: `.monshi2 on` یا `.monshi2 off`\n• حالت نمایش: `.monshi2 mode photo` / `text` / `user`\n• تست پنل عضویت: `.monshi2 test`\n• وضعیت کامل: `.monshi2`""",
+            "config": """**تنظیمات پیشرفته Monshi2 Pro**\n\n• زمان کول‌داون: `.monshi2 cooldown 60`\n• حذف خودکار کارت: `.monshi2 delete on/off`\n• بلاک کاربران غیرعضو: `.monshi2 block on/off`\n• کانال‌های مجاز: `.monshi2 allow @ch1 @ch2`""",
+            "links": """**مدیریت لینک‌های کانال Monshi2**\n\n• تنظیم کانال اصلی: `.monshi2 link @channel`\n• تنظیم کانال + لینک خصوصی: `.monshi2 link @channel https://t.me/invite`\n• مشاهده لیست: `.monshi2 links`""",
+            "text": """**شخصی‌سازی متن هشدار Monshi2**\n\n• تنظیم متن دلخواه: `.monshi2 settext متن مورد نظر`\n• مشاهده پیش‌نمایش متن: `.monshi2 text`\n• بازنشانی پیش‌فرض: `.monshi2 resettext`""",
+            "users": """**مدیریت کاربران و استثناها**\n\n• وایت‌لیست کاربر: `.monshi2 user 12345678`\n• حذف کاربر: `.monshi2 deluser 12345678`\n• مشاهده لیست: `.monshi2 users`""",
+            "stats": """**آمار عملکرد Monshi2 Pro**\n\nبرای مشاهده شمارنده‌های عملیاتی از دستور `.monshi2 stats` داخل سلف استفاده کن.\n\nآمارها شامل پیام‌های بلاک‌شده، پنل‌های ارسالی، رد شده با کول‌داون، تأیید موفق/ناموفق و پنل‌های حذف‌شده است.""",
+        }
+    return texts.get(section, texts["main"])
 
 
 def _monshi2_helper_panel_keyboard(user_id, lang="fa", section="main"):
-     suffix = str(user_id)
-     if section == "main":
-          if lang == "en":
-               rows = [
-                    [InlineKeyboardButton("Core Settings", callback_data=f"monshi2_config2-{suffix}"), InlineKeyboardButton("Links", callback_data=f"monshi2_links2-{suffix}")],
-                    [InlineKeyboardButton("Text / Photo", callback_data=f"monshi2_text2-{suffix}"), InlineKeyboardButton("Users", callback_data=f"monshi2_users2-{suffix}")],
-                    [InlineKeyboardButton("Stats", callback_data=f"monshi2_stats2-{suffix}")],
-                    [InlineKeyboardButton("🔙 Back", callback_data=f"back2-{suffix}"), InlineKeyboardButton("✖ Close", callback_data=f"close2-{suffix}")],
-               ]
-          else:
-               rows = [
-                    [InlineKeyboardButton("تنظیمات اصلی", callback_data=f"monshi2_config1-{suffix}"), InlineKeyboardButton("لینک‌ها", callback_data=f"monshi2_links1-{suffix}")],
-                    [InlineKeyboardButton("متن / عکس", callback_data=f"monshi2_text1-{suffix}"), InlineKeyboardButton("کاربران", callback_data=f"monshi2_users1-{suffix}")],
-                    [InlineKeyboardButton("آمار", callback_data=f"monshi2_stats1-{suffix}")],
-                    [InlineKeyboardButton("🔙 بازگشت", callback_data=f"back1-{suffix}"), InlineKeyboardButton("✖ بستن", callback_data=f"close1-{suffix}")],
-               ]
-     else:
-          rows = [[InlineKeyboardButton("🔙 Monshi2", callback_data=f"monshi2_panel{2 if lang == 'en' else 1}-{suffix}")]]
-     return InlineKeyboardMarkup(rows)
+    suffix = str(user_id)
+    if lang == "en":
+        rows = [
+            [InlineKeyboardButton("⚙️ Config Guide", callback_data=f"monshi2_config2-{suffix}"), InlineKeyboardButton("🔗 Links Guide", callback_data=f"monshi2_links2-{suffix}")],
+            [InlineKeyboardButton("📝 Text Guide", callback_data=f"monshi2_text2-{suffix}"), InlineKeyboardButton("👥 Users Guide", callback_data=f"monshi2_users2-{suffix}")],
+            [InlineKeyboardButton("📊 Stats Guide", callback_data=f"monshi2_stats2-{suffix}")],
+            [InlineKeyboardButton("🔙 Back to Panel", callback_data=f"back2-{suffix}")],
+        ]
+    else:
+        rows = [
+            [InlineKeyboardButton("⚙️ راهنمای تنظیمات", callback_data=f"monshi2_config1-{suffix}"), InlineKeyboardButton("🔗 راهنمای لینک‌ها", callback_data=f"monshi2_links1-{suffix}")],
+            [InlineKeyboardButton("📝 شخصی‌سازی متن", callback_data=f"monshi2_text1-{suffix}"), InlineKeyboardButton("👥 مدیریت کاربران", callback_data=f"monshi2_users1-{suffix}")],
+            [InlineKeyboardButton("📊 آمار عملیاتی", callback_data=f"monshi2_stats1-{suffix}")],
+            [InlineKeyboardButton("🔙 بازگشت به پنل", callback_data=f"back1-{suffix}")],
+        ]
+    if section != "main":
+        rows.append([InlineKeyboardButton("🔙 Monshi2", callback_data=f"monshi2_panel{2 if lang == 'en' else 1}-{suffix}")])
+    return InlineKeyboardMarkup(rows)
+
 
 async def _titan_close_panel(client, call, fallback_text="**● پنل راهنما بسته شد ●**"):
-     """Close panel. Normal photo messages are deleted with their card.
-
-     Telegram does not provide chat_id/message_id for inline callback messages,
-     so true deletion is only possible for normal messages. For inline messages
-     we remove buttons and replace the caption/text with a closed notice.
-     """
-     if getattr(call, "message", None):
-          try:
-               await call.message.delete()
-               return
-          except Exception as exc:
-               print(f"{Fore.YELLOW}TITAN close delete failed: {exc}{Fore.RESET}")
-     if getattr(call, "inline_message_id", None):
-          try:
-               return await client.edit_inline_caption(
-                    inline_message_id=call.inline_message_id,
-                    caption=fallback_text,
-                    reply_markup=None
-               )
-          except Exception:
-               return await client.edit_inline_text(
-                    inline_message_id=call.inline_message_id,
-                    text=fallback_text,
-                    reply_markup=None
-               )
-
-
-_TITAN_INLINE_URL_CACHE = {}
-_TITAN_INLINE_FILE_ID_CACHE = {}
-
-async def _titan_cached_photo_file_id(client, user):
-     """Create/reuse Telegram cached photo file_id for inline results.
-
-     Inline panel in Saved Messages/groups/channels is sent by self.py through
-     inline mode. Inline photo results are most reliable when we answer with a
-     Telegram cached photo file_id instead of depending on public image hosts.
-     We upload the generated card once to the user's private helper chat, grab
-     its file_id, delete that temporary message, then reuse the file_id.
-     """
-     card_path = await render_titan_user_card_cached(client, user)
-     try:
-          stat_key = f"{card_path}:{int(os.path.getmtime(card_path))}:{os.path.getsize(card_path)}"
-     except Exception:
-          stat_key = card_path
-     if stat_key in _TITAN_INLINE_FILE_ID_CACHE:
-          return _TITAN_INLINE_FILE_ID_CACHE[stat_key]
-
-     sent = await client.send_photo(user.id, photo=card_path)
-     file_id = None
-     try:
-          if getattr(sent, "photo", None):
-               file_id = getattr(sent.photo, "file_id", None)
-     except Exception:
-          file_id = None
-     try:
-          await sent.delete()
-     except Exception:
-          try:
-               await client.delete_messages(user.id, sent.id)
-          except Exception:
-               pass
-     if not file_id:
-          raise RuntimeError("Could not obtain Telegram cached photo file_id")
-     _TITAN_INLINE_FILE_ID_CACHE[stat_key] = file_id
-     print(f"{Fore.GREEN}TITAN inline cached photo_file_id created{Fore.RESET}")
-     return file_id
-
-
-def _upload_public_image_sync(card_path):
-     """Upload a generated card to a public image URL for inline mode.
-
-     InlineQueryResultPhoto requires an HTTPS URL. We try multiple public hosts
-     so inline panel does not fall back to a text-only error when one host fails.
-     """
-     errors_list = []
-
-     # 1) Telegraph
-     try:
-          from telegraph import upload_file
-          uploaded = upload_file(card_path)
-          if uploaded:
-               return "https://telegra.ph" + uploaded[0]
-          errors_list.append("Telegraph returned empty result")
-     except Exception as exc:
-          errors_list.append(f"Telegraph: {exc}")
-
-     # 2) 0x0.st — returns a direct URL as plain text
-     try:
-          with open(card_path, "rb") as f:
-               res = requests.post("https://0x0.st", files={"file": f}, timeout=45)
-          if res.ok and res.text.strip().startswith("https://"):
-               return res.text.strip()
-          errors_list.append(f"0x0.st: HTTP {res.status_code} {res.text[:120]}")
-     except Exception as exc:
-          errors_list.append(f"0x0.st: {exc}")
-
-     # 3) tmpfiles.org — JSON URL, convert to direct /dl/ link
-     try:
-          with open(card_path, "rb") as f:
-               res = requests.post("https://tmpfiles.org/api/v1/upload", files={"file": f}, timeout=45)
-          if res.ok:
-               data = res.json()
-               url = data.get("data", {}).get("url")
-               if url:
-                    return url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
-          errors_list.append(f"tmpfiles: HTTP {res.status_code} {res.text[:120]}")
-     except Exception as exc:
-          errors_list.append(f"tmpfiles: {exc}")
-
-     raise RuntimeError(" | ".join(errors_list))
-
-
-async def _titan_inline_photo_url(client, user):
-     """Upload cached TiTaN card PNG for inline-mode usage in any chat."""
-     card_path = await render_titan_user_card_cached(client, user)
-     try:
-          stat_key = f"{card_path}:{int(os.path.getmtime(card_path))}:{os.path.getsize(card_path)}"
-     except Exception:
-          stat_key = card_path
-     if stat_key in _TITAN_INLINE_URL_CACHE:
-          return _TITAN_INLINE_URL_CACHE[stat_key]
-
-     url = await asyncio.to_thread(_upload_public_image_sync, card_path)
-     _TITAN_INLINE_URL_CACHE[stat_key] = url
-     print(f"{Fore.GREEN}TITAN inline card uploaded: {url}{Fore.RESET}")
-     return url
-
-
-
-
-keyboard_idk = ReplyKeyboardMarkup(
-     [
-         [
-             ("Add Admin"),
-             ("Delete Admin"),
-             ("Admin List")
-         ],
-         [
-             ("Add Owner"),
-             ("Delete Owner"),
-             ("Owner List")
-         ]
-     ],
-one_time_keyboard=True,resize_keyboard=True)
-
-@app.on_inline_query()
-async def answer(client, inline_query):
-     chat_id = inline_query.from_user.id
-     AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = {chat_id} LIMIT 1")
-     if AdminUser is not None:
-          if inline_query.query.strip().lower() in ["panel", "help", "helper"] or inline_query.query.strip() in ["پنل", "راهنما"]:
-               try:
-                    user = await client.get_users(inline_query.from_user.id)
-                    lang_text = "زبان پنل را انتخاب کن / Choose panel language:"
-                    lang_markup = _titan_language_keyboard(user.id)
-                    try:
-                         cached_file_id = await _titan_cached_photo_file_id(client, user)
-                         await inline_query.answer(
-                              results=[
-                                   InlineQueryResultCachedPhoto(
-                                        title="TiTaN SelfSaz Panel",
-                                        description="Dynamic TiTaN identity card panel (Bilingual)",
-                                        photo_file_id=cached_file_id,
-                                        caption=lang_text,
-                                        reply_markup=lang_markup
-                                   )
-                              ],
-                              cache_time=1,
-                              is_personal=True
-                         )
-                    except Exception as cached_exc:
-                         print(f"{Fore.YELLOW}TITAN cached inline photo failed, trying public URL: {cached_exc}{Fore.RESET}")
-                         photo_url = await _titan_inline_photo_url(client, user)
-                         await inline_query.answer(
-                              results=[
-                                   InlineQueryResultPhoto(
-                                        title="TiTaN SelfSaz Panel",
-                                        description="Dynamic TiTaN identity card panel (Bilingual)",
-                                        photo_url=photo_url,
-                                        thumb_url=photo_url,
-                                        caption=lang_text,
-                                        reply_markup=lang_markup
-                                   )
-                              ],
-                              cache_time=1,
-                              is_personal=True
-                         )
-               except Exception as exc:
-                    print(f"{Fore.YELLOW}TITAN inline panel generation failed: {exc}{Fore.RESET}")
-                    await inline_query.answer(
-                         results=[
-                              InlineQueryResultArticle(
-                                   title="TiTaN SelfSaz Panel",
-                                   input_message_content=InputTextMessageContent("زبان پنل را انتخاب کن / Choose panel language:"),
-                                   description="Choose Persian or English panel",
-                                   reply_markup=_titan_language_keyboard(inline_query.from_user.id)
-                              ),
-                         ],
-                         cache_time=1,
-                         is_personal=True
-                    )
-
-          
-
-          
-
-          if inline_query.query == "coinprice":
-               s = requests.get('https://api.nobitex.ir/market/stats?srcCurrency=usdt,trx,ton,btc,shib,eth,etc,usdt,ada,bch,ltc,bnb&dstCurrency=irt,rls,usdt')
-               s = s.text
-               js = json.loads(s)
-               byusdt = js['stats']['usdt-irt']['bestBuy']
-               sellusdt = js['stats']['usdt-irt']['bestSell']
-               bytrx = js['stats']['trx-irt']['bestBuy']
-               selltrx = js['stats']['trx-irt']['bestSell']
-               byton = js['stats']['ton-irt']['bestBuy']
-               sellton = js['stats']['ton-irt']['bestSell']
-               byshib = js['stats']['shib-usdt']['bestBuy']
-               sellshib = js['stats']['shib-usdt']['bestSell']
-               bybit = js['stats']['btc-usdt']['bestBuy']
-               sellbit = js['stats']['btc-usdt']['bestSell']
-               byet = js['stats']['eth-usdt']['bestBuy']
-               sellet = js['stats']['eth-usdt']['bestSell']
-               byetc = js['stats']['etc-usdt']['bestBuy']
-               selletc = js['stats']['etc-usdt']['bestSell']
-               byada = js['stats']['ada-usdt']['bestBuy']
-               sellada = js['stats']['ada-usdt']['bestSell']
-               bybch = js['stats']['bch-usdt']['bestBuy']
-               sellbch = js['stats']['bch-usdt']['bestSell']
-               byltc = js['stats']['ltc-usdt']['bestBuy']
-               sellltc = js['stats']['ltc-usdt']['bestSell']
-               bybnb = js['stats']['bnb-usdt']['bestBuy']
-               sellbnb = js['stats']['bnb-usdt']['bestSell']
-
-               coind = InlineKeyboardMarkup(
-                    [
-                         [
-                              InlineKeyboardButton("Currency", callback_data="outside"),
-                              InlineKeyboardButton("Best Buy", callback_data="outside"),
-                              InlineKeyboardButton("Best Sell", callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("USDT", callback_data="outside"),
-                              InlineKeyboardButton("☫%s" % byusdt, callback_data="outside"),
-                              InlineKeyboardButton("☫%s" % sellusdt, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("TRX", callback_data="outside"),
-                              InlineKeyboardButton("☫%s" % bytrx, callback_data="outside"),
-                              InlineKeyboardButton("☫%s" % selltrx, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("TON", callback_data="outside"),
-                              InlineKeyboardButton("☫%s" % byton, callback_data="outside"),
-                              InlineKeyboardButton("☫%s" % sellton, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("SHIB", callback_data="outside"),
-                              InlineKeyboardButton("$%s" % byshib, callback_data="outside"),
-                              InlineKeyboardButton("$%s" % sellshib, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("BTC", callback_data="outside"),
-                              InlineKeyboardButton("$%s" % bybit, callback_data="outside"),
-                              InlineKeyboardButton("$%s" % sellbit, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("ETH", callback_data="outside"),
-                              InlineKeyboardButton("$%s" % byet, callback_data="outside"),
-                              InlineKeyboardButton("$%s" % sellet, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("ETC", callback_data="outside"),
-                              InlineKeyboardButton("$%s" % byetc, callback_data="outside"),
-                              InlineKeyboardButton("$%s" % selletc, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("ADA", callback_data="outside"),
-                              InlineKeyboardButton("$%s" % byada, callback_data="outside"),
-                              InlineKeyboardButton("$%s" % sellada, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("BCH", callback_data="outside"),
-                              InlineKeyboardButton("$%s" % bybch, callback_data="outside"),
-                              InlineKeyboardButton("$%s" % sellbch, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("LTC", callback_data="outside"),
-                              InlineKeyboardButton("$%s" % byltc, callback_data="outside"),
-                              InlineKeyboardButton("$%s" % sellltc, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("BNB", callback_data="outside"),
-                              InlineKeyboardButton("$%s" % bybnb, callback_data="outside"),
-                              InlineKeyboardButton("$%s" % sellbnb, callback_data="outside")
-                         ],
-                         [
-                              InlineKeyboardButton("Close ×", callback_data=f'Close-{inline_query.from_user.id}')
-                         ]
-                    ]
-               )
-
-               await inline_query.answer(
-                    results=[
-                         InlineQueryResultArticle(
-                              title="Coin price",
-                              input_message_content=InputTextMessageContent("➣ **Currency price list**"),
-                              url="https://t.me/KING_MEMBEER",
-                              description="ᴄʀɪᴛᴜs",
-                              thumb_url="https://t.me/KING_MEMBEER/33",
-                              reply_markup=coind
-                         ),
-                    ],
-                    cache_time=1
-               )
-
-
+    if getattr(call, "message", None):
+        try:
+            return await call.message.delete()
+        except Exception:
+            pass
+    try:
+        return await _titan_show_paginated_text(client, call, fallback_text, reply_markup=None)
+    except Exception:
+        pass
 
 
 @app.on_message(filters.text & filters.regex(r"(?i)^(panel|help|helper|پنل|راهنما)$"), group=-100)
@@ -4105,368 +3723,116 @@ async def direct_panel_trigger(client, message: Message):
     update_data(f"UPDATE user SET step = 'none' WHERE id = '{message.from_user.id}' LIMIT 1")
     raise StopPropagation
 
+
 @app.on_callback_query()
 async def call(app, call):
-     AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = '{call.from_user.id}' LIMIT 1")
+    AdminUser = get_data(f"SELECT * FROM adminlist WHERE id = '{call.from_user.id}' LIMIT 1")
+    if AdminUser is None:
+        await call.answer("دسترسی غیر مجاز 🚫", show_alert=False)
+        return
 
-     mark1 = InlineKeyboardMarkup(
-          [
-               [
-                    InlineKeyboardButton('سراسری - شخصی',callback_data=f'global_person1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('پروفایل',callback_data=f'profile1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('دانلودر',callback_data=f'downloader1-{call.from_user.id}'), 
-                    InlineKeyboardButton('آپلودر',callback_data=f'uploader1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('حالت متن',callback_data=f'text_mode1-{call.from_user.id}'),
-                    InlineKeyboardButton('حالت اکشن',callback_data=f'action_mode1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('وبهوک',callback_data=f'webhook1-{call.from_user.id}'),
-                    InlineKeyboardButton('قفل ها',callback_data=f'locks1-{call.from_user.id}'),
-                    InlineKeyboardButton('کرون جاب',callback_data=f'cronjob1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('آنتی لاگین',callback_data=f'antilogin1-{call.from_user.id}'),
-                    InlineKeyboardButton('تبچی',callback_data=f'tabchi1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('ویرایشگر عکس',callback_data=f'photo_editor1-{call.from_user.id}'),
-                    InlineKeyboardButton('گیف و لوگو ساز',callback_data=f'marker1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('کامپایلر',callback_data=f'compiler1-{call.from_user.id}'),
-                    InlineKeyboardButton('ابزار ها',callback_data=f'tools1-{call.from_user.id}'),
-                    InlineKeyboardButton('اکانت',callback_data=f'account1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('کتاب',callback_data=f'book1-{call.from_user.id}'),
-                    InlineKeyboardButton('سرگرمی',callback_data=f'fun1-{call.from_user.id}'),
-                    InlineKeyboardButton('بازار',callback_data=f'market1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('استیکر - گیف',callback_data=f'photo_gif1-{call.from_user.id}'),
-                    InlineKeyboardButton('هوش مصنوعی',callback_data=f'ai1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('عکس',callback_data=f'photo1-{call.from_user.id}'),
-                    InlineKeyboardButton('موزیک',callback_data=f'music1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('مدیریت Monshi2 Pro',callback_data=f'monshi2_panel1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('تنظیمات سیستم',callback_data=f'system1-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('● بستن پنل ●',callback_data=f'close1-{call.from_user.id}')
-               ]
-          ]
-     )
+    if call.data == "openpanel":
+        try:
+            user = await app.get_users(call.from_user.id)
+            if call.message:
+                try:
+                    await call.message.delete()
+                except Exception:
+                    pass
+            target_chat_id = call.message.chat.id if call.message else call.from_user.id
+            await send_titan_panel(app, target_chat_id, user=user, language="fa")
+            await call.answer()
+        except Exception as exc:
+            print(f"TITAN callback panel generation failed: {exc}")
+            await call.answer("خطا در ساخت پنل", show_alert=True)
+        return
 
-     mark2 = InlineKeyboardMarkup(
-          [
-               [
-                    InlineKeyboardButton('𝗚𝗹𝗼𝗯𝗮𝗹 - 𝗣𝗲𝗿𝘀𝗼𝗻𝗮𝗹',callback_data=f'global_person2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗣𝗿𝗼𝗳𝗶𝗹𝗲',callback_data=f'profile2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗗𝗼𝘄𝗻𝗹𝗼𝗮𝗱𝗲𝗿',callback_data=f'downloader2-{call.from_user.id}'), 
-                    InlineKeyboardButton('𝗨𝗽𝗹𝗼𝗮𝗱𝗲𝗿',callback_data=f'uploader2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗧𝗲𝘅𝘁 𝗠𝗼𝗱𝗲',callback_data=f'text_mode2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗔𝗰𝘁𝗶𝗼𝗻 𝗠𝗼𝗱𝗲',callback_data=f'action_mode2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗪𝗲𝗯𝗵𝗼𝗼𝗸',callback_data=f'webhook2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗟𝗼𝗰𝗸𝘀',callback_data=f'locks2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗖𝗿𝗼𝗻 𝗝𝗼𝗯',callback_data=f'cronjob2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗔𝗻𝘁𝗶 𝗟𝗼𝗴𝗶𝗻',callback_data=f'antilogin2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗧𝗮𝗯𝗰𝗵𝗶',callback_data=f'tabchi2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗣𝗵𝗼𝘁𝗼 𝗘𝗱𝗶𝘁𝗼𝗿',callback_data=f'photo_editor2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗟 - 𝗚 𝗠𝗮𝗿𝗸𝗲𝗿',callback_data=f'marker2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗖𝗼𝗺𝗽𝗶𝗹𝗲𝗿',callback_data=f'compiler2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗧𝗼𝗼𝗹𝘀',callback_data=f'tools2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗔𝗰𝗰𝗼𝘂𝗻𝘁',callback_data=f'account2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗕𝗼𝗼𝗸',callback_data=f'book2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗙𝘂𝗻',callback_data=f'fun2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗠𝗮𝗿𝗸𝗲𝘁',callback_data=f'market2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗦𝘁𝗶𝗰𝗸𝗲𝗿 - 𝗚𝗶𝗳',callback_data=f'photo_gif2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗔𝗜',callback_data=f'ai2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗣𝗵𝗼𝘁𝗼',callback_data=f'photo2-{call.from_user.id}'),
-                    InlineKeyboardButton('𝗠𝘂𝘀𝗶𝗰',callback_data=f'music2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗠𝗼𝗻𝘀𝗵𝗶𝟮 𝗣𝗿𝗼',callback_data=f'monshi2_panel2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('𝗦𝘆𝘀𝘁𝗲𝗺',callback_data=f'system2-{call.from_user.id}')
-               ],
-               [
-                    InlineKeyboardButton('● 𝗖𝗹𝗼𝘀𝗲 𝗣𝗮𝗻𝗲𝗹 ●',callback_data=f'close2-{call.from_user.id}')
-               ]
-          ]
-     )
+    if call.data != "outside":
+        try:
+            _target_user_id = int(call.data.split("-")[-1])
+        except Exception:
+            _target_user_id = call.from_user.id
 
-     dast1 = InlineKeyboardMarkup(
-          [
-               [
-                    InlineKeyboardButton("● بازگشت ●", callback_data=f'back1-{call.from_user.id}')
-               ]
-          ]
-     )
+        if int(call.from_user.id) == int(_target_user_id):
+            _action = call.data.split("-")[0]
 
-     dast2 = InlineKeyboardMarkup(
-          [
-               [
-                    InlineKeyboardButton("● 𝗕𝗮𝗰𝗸 ●", callback_data=f'back2-{call.from_user.id}')
-               ]
-          ]
-     )
+            if _action == "persian" or _action == "back1":
+                await _titan_show_paginated_text(
+                    app,
+                    call,
+                    text="╭━━━ ⚡ TiTaN SelfSaz ━━━╮\n┃ 🇮🇷 پنل راهنمای اولترا سلف\n┃ لطفاً بخش مورد نظر را انتخاب کنید:\n╰━━━━━━━━━━━━━━━━━━━━━━╯",
+                    reply_markup=build_titan_panel_keyboard(call.from_user.id, language="fa")
+                )
+                await call.answer()
+                return
 
-     if call.data == "openpanel":
-          if AdminUser is None:
-               await call.answer("دسترسی غیر مجاز 🚫", show_alert=False)
-               return
-          try:
-               user = await app.get_users(call.from_user.id)
-               if call.message:
-                    try:
-                         await call.message.delete()
-                    except Exception:
-                         pass
-               target_chat_id = call.message.chat.id if call.message else call.from_user.id
-               await send_titan_panel(app, target_chat_id, user=user, language="fa")
-               await call.answer()
-          except Exception as exc:
-               print(f"{Fore.YELLOW}TITAN callback panel generation failed: {exc}{Fore.RESET}")
-               await call.answer("خطا در ساخت پنل", show_alert=True)
-          return
+            if _action == "english" or _action == "back2":
+                await _titan_show_paginated_text(
+                    app,
+                    call,
+                    text="╭━━━ ⚡ TiTaN SelfSaz ━━━╮\n┃ 🇬🇧 TiTaN SelfSaz Help Center\n┃ Please select a section:\n╰━━━━━━━━━━━━━━━━━━━━━━╯",
+                    reply_markup=build_titan_panel_keyboard(call.from_user.id, language="en")
+                )
+                await call.answer()
+                return
 
-     if call.data != "outside":
-          try:
-               _target_user_id = int(call.data.split("-")[-1])
-          except Exception:
-               _target_user_id = call.from_user.id
-          if AdminUser is not None and int(call.from_user.id) == int(_target_user_id):
-               _action = call.data.split("-")[0]
+            if _action in _TITAN_HELP_ACTIONS:
+                _lang, _key = _TITAN_HELP_ACTIONS[_action]
+                await _titan_show_help_page(app, call, _lang, _key, 0, call.from_user.id)
+                await call.answer()
+                return
 
-               # Paginated TiTaN help sections: prevents Telegram caption limit
-               # while keeping all commands visible across pages.
-               if _action in _TITAN_HELP_ACTIONS:
-                    _lang, _key = _TITAN_HELP_ACTIONS[_action]
-                    await _titan_show_help_page(app, call, _lang, _key, 0, call.from_user.id)
+            if _action == "hpg":
+                _parts = call.data.split("-")
+                if len(_parts) >= 5:
+                    await _titan_show_help_page(app, call, _parts[1], _parts[2], int(_parts[3]), call.from_user.id)
+                    await call.answer()
                     return
 
-               if _action == "hpg":
-                    _parts = call.data.split("-")
-                    if len(_parts) >= 5:
-                         await _titan_show_help_page(app, call, _parts[1], _parts[2], int(_parts[3]), call.from_user.id)
-                         return
-     
-               if _action.startswith("monshi2_"):
-                    lang = "en" if _action.endswith("2") else "fa"
-                    base = _action[:-1] if _action[-1:] in ["1", "2"] else _action
-                    section = "main"
-                    if base == "monshi2_config":
-                         section = "config"
-                    elif base == "monshi2_links":
-                         section = "links"
-                    elif base == "monshi2_text":
-                         section = "text"
-                    elif base == "monshi2_users":
-                         section = "users"
-                    elif base == "monshi2_stats":
-                         section = "stats"
-                    await _titan_edit_inline_or_chat(app, call, text=_monshi2_helper_panel_text(lang, section), reply_markup=_monshi2_helper_panel_keyboard(call.from_user.id, lang, section))
+            if _action.startswith("monshi2_"):
+                lang = "en" if _action.endswith("2") else "fa"
+                base = _action[:-1] if _action[-1:] in ["1", "2"] else _action
+                section = "main"
+                if base == "monshi2_config":
+                    section = "config"
+                elif base == "monshi2_links":
+                    section = "links"
+                elif base == "monshi2_text":
+                    section = "text"
+                elif base == "monshi2_users":
+                    section = "users"
+                elif base == "monshi2_stats":
+                    section = "stats"
+                await _titan_show_paginated_text(
+                    app,
+                    call,
+                    text=_monshi2_helper_panel_text(lang, section),
+                    reply_markup=_monshi2_helper_panel_keyboard(call.from_user.id, lang, section)
+                )
+                await call.answer()
+                return
 
-               elif call.data.split("-")[0] == "persian":
-                    await _titan_edit_inline_or_chat(app, call, text=f"**سلام {call.from_user.first_name} به راهنمای اولترا سلف خوش آمدید. لطفا بخش مورد نظر خود را انتخاب کنید:**", reply_markup=mark1)
+            if _action == "close1":
+                await _titan_close_panel(app, call, "**● پنل راهنما بسته شد ●**")
+                await call.answer()
+                return
 
-               elif call.data.split("-")[0] == "english":
-                    await _titan_edit_inline_or_chat(app, call, text=f"**Hello {call.from_user.first_name} Welcome to Ultra Self help.\nPlease select the section you want:**", reply_markup=mark2)
+            if _action == "close2":
+                await _titan_close_panel(app, call, "**● Helper Panel Closed ●**")
+                await call.answer()
+                return
 
-               elif call.data.split("-")[0] == "back1":
-                    await _titan_edit_inline_or_chat(app, call, text=f"**سلام {call.from_user.first_name} به راهنمای اولترا سلف خوش آمدید. لطفا بخش مورد نظر خود را انتخاب کنید:**", reply_markup=mark1)
+            if _action == "Close":
+                await _titan_close_panel(app, call, "**● Closed ●**")
+                await call.answer()
+                return
 
-               elif call.data.split("-")[0] == "back2":
-                    await _titan_edit_inline_or_chat(app, call, text=f"**Hello {call.from_user.first_name} Welcome to Ultra Self help.\nPlease select the section you want:**", reply_markup=mark2)
-
-               elif call.data.split("-")[0] == "global_person1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp1, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "profile1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp2, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "downloader1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp3, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "uploader1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp4, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "text_mode1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp5, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "action_mode1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp6, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "webhook1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp7, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "locks1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp8, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "cronjob1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp9, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "antilogin1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp10, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "tabchi1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp11, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "photo_editor1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp12, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "marker1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp13, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "compiler1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp14, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "tools1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp15, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "account1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp16, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "book1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp17, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "fun1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp18, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "market1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp19, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "photo_gif1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp20, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "ai1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp21, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "photo1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp22, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "music1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp23, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "system1":
-                    await _titan_edit_inline_or_chat(app, call, text=fahelp24, reply_markup=dast1)
-
-               elif call.data.split("-")[0] == "global_person2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp1, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "profile2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp2, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "downloader2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp3, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "uploader2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp4, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "text_mode2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp5, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "action_mode2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp6, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "webhook2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp7, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "locks2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp8, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "cronjob2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp9, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "antilogin2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp10, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "tabchi2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp11, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "photo_editor2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp12, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "marker2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp13, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "compiler2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp14, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "tools2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp15, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "account2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp16, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "book2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp17, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "fun2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp18, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "market2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp19, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "photo_gif2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp20, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "ai2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp21, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "photo2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp22, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "music2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp23, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "system2":
-                    await _titan_edit_inline_or_chat(app, call, text=enhelp24, reply_markup=dast2)
-
-               elif call.data.split("-")[0] == "close1":
-                    await _titan_close_panel(app, call, "**● پنل راهنما بسته شد ●**")
-
-               elif call.data.split("-")[0] == "close2":
-                    await _titan_close_panel(app, call, "**● Helper Panel Closed ●**")
-
-               elif call.data.split("-")[0] == "Close":
-                    await _titan_close_panel(app, call, "**● Closed ●**")
-          else:
-               await call.answer("دسترسی غیر مجاز 🚫", show_alert=False)
-     else:
-          await call.answer("این دکمه نمایشی است", show_alert=True)
+        else:
+            await call.answer("دسترسی غیر مجاز 🚫", show_alert=False)
+            return
+    else:
+        await call.answer("—", show_alert=False)
+        return
 
 @app.on_message(filters.private&filters.command("restart"), group=1)
 async def updates(app, m:Message):
