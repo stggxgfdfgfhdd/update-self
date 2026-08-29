@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-25-command-panel-bilingual-v8-2"
+FIX_VERSION = "2026-08-25-worldclock-luxury-v9-0"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -1102,6 +1102,97 @@ async def noprefix_command_bridge(app, message: Message):
         print(f"No-prefix command bridge exception: {exc}")
         return
 # ================= End No-Prefix Command Alias Bridge =================
+
+
+
+# ================= WORLD CLOCK PRO MANAGEMENT =================
+@app.on_message(filters.command(["worldclock", "clock", "countrytime", "ساعت"], ".") & filters.me, group=-70)
+async def world_clock_command(app, m: Message):
+    data = json_read("data.json")
+    text = (m.text or "").strip()
+    parts = text.split()
+    
+    # Subcommands: .worldclock set COUNTRY_CODE FONT_STYLE
+    # e.g. .worldclock set ir bold
+    # e.g. .worldclock set de sans_bold
+    if len(parts) >= 2 and parts[1].lower() in ["list", "کشورها", "لیست"]:
+        rows = [f"• `{k}`: {v['flag']} {v['fa_name']} ({v['en_name']})" for k, v in WORLD_CLOCK_COUNTRIES.items()]
+        await m.edit_text("<b>🌍 لیست ۱۶ کشور ساعت جهانی:</b>\n\n" + "\n".join(rows) + "\n\n<b>نحوه تنظیم:</b> `.worldclock ir bold`")
+        return
+
+    if len(parts) >= 2 and parts[1].lower() in ["fonts", "فونت", "فونت‌ها"]:
+        rows = [f"• `{k}`: {v['sample']} ({v['name']})" for k, v in WORLD_CLOCK_FONTS.items()]
+        await m.edit_text("<b>🔤 لیست فونت‌های شیک ساعت:</b>\n\n" + "\n".join(rows) + "\n\n<b>نحوه تنظیم:</b> `.worldclock ir bold`")
+        return
+
+    if len(parts) >= 3:
+        country_code = parts[1].lower()
+        font_style = parts[2].lower()
+        if country_code in WORLD_CLOCK_COUNTRIES and font_style in WORLD_CLOCK_FONTS:
+            data["clock_country"] = country_code
+            data["clock_font"] = font_style
+            write("data.json", json.dumps(data, ensure_ascii=False))
+            preview = format_country_clock(country_code, font_style, True, True, "fa")
+            await m.edit_text(f"<b>🌍 ساعت کشور {WORLD_CLOCK_COUNTRIES[country_code]['flag']} {WORLD_CLOCK_COUNTRIES[country_code]['fa_name']} با موفقیت تنظیم شد:</b>\n\n<b>پیش‌نمایش:</b> <code>{preview}</code>\n\nجهت فعال‌سازی روی اسم: `.timename on`\nجهت فعال‌سازی روی بیو: `.timebio on`")
+            return
+
+    # Default overview & live preview
+    cc = data.get("clock_country", "ir")
+    f_st = data.get("clock_font", "bold")
+    c_info = WORLD_CLOCK_COUNTRIES.get(cc, WORLD_CLOCK_COUNTRIES["ir"])
+    f_info = WORLD_CLOCK_FONTS.get(f_st, WORLD_CLOCK_FONTS["bold"])
+    preview_fa = format_country_clock(cc, f_st, True, True, "fa")
+    preview_en = format_country_clock(cc, f_st, True, True, "en")
+    
+    t_name = data.get("timename", "off").upper()
+    t_bio = data.get("timebio", "off").upper()
+
+    card = f"""╭━━━ 🌍 <b>TiTaN World Clock</b> ━━━╮
+┃ <b>کشور انتخابی:</b> {c_info['flag']} {c_info['fa_name']} ({c_info['en_name']})
+┃ <b>فونت انتخابی:</b> {f_info['name']}
+┃ <b>پیش‌نمایش فارسی:</b> <code>{preview_fa}</code>
+┃ <b>پیش‌نمایش انگلیسی:</b> <code>{preview_en}</code>
+┃ <b>وضعیت ساعت روی نام:</b> <code>{t_name}</code>
+┃ <b>وضعیت ساعت روی بیو:</b> <code>{t_bio}</code>
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+<i>دستورات تنظیم:</i>
+• مشاهده کشورها: `.worldclock list`
+• مشاهده فونت‌ها: `.worldclock fonts`
+• تنظیم ساعت: `.worldclock ir bold` یا `.worldclock de sans_bold`
+• فعال‌سازی روی اسم: `.timename on/off`
+• فعال‌سازی روی بیو: `.timebio on/off`"""
+    await m.edit_text(card, parse_mode=enums.ParseMode.HTML)
+
+
+# ================= ZEKR & KANGAROO HANDLERS =================
+_ZEKR_DAYS = {
+    0: ("شنبه", "یَا رَبَّ الْعَالَمِینَ (۱۰۰ مرتبه)"),
+    1: ("یکشنبه", "یَا ذَا الْجَلالِ وَ الإِکْرَامِ (۱۰۰ مرتبه)"),
+    2: ("دوشنبه", "یَا قَاضِیَ الْحَاجَاتِ (۱۰۰ مرتبه)"),
+    3: ("سه‌شنبه", "یَا أَرْحَمَ الرَّاحِمِینَ (۱۰۰ مرتبه)"),
+    4: ("چهارشنبه", "یَا حَیُّ یَا قَیُّومُ (۱۰۰ مرتبه)"),
+    5: ("پنجشنبه", "لا إِلهَ إِلَّا اللَّهُ المَلِکُ الحَقُّ المُبینُ (۱۰۰ مرتبه)"),
+    6: ("جمعه", "اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ وَ آلِ مُحَمَّدٍ (۱۰۰ مرتبه)"),
+}
+
+@app.on_message(filters.command(["zekr", "ذکر"], ".") & filters.me, group=-70)
+async def zekr_command(app, m: Message):
+    try:
+        weekday = datetime.now().weekday()
+        day_name, zekr_text = _ZEKR_DAYS.get(weekday, _ZEKR_DAYS[0])
+        await m.edit_text(f"╭━━━ 📿 <b>ذکر روز {day_name}</b> ━━━╮\n┃ <code>{zekr_text}</code>\n╰━━━━━━━━━━━━━━━━━━━━━╯", parse_mode=enums.ParseMode.HTML)
+    except Exception as exc:
+        await m.edit_text(f"📿 ذکر روز: `یَا رَبَّ الْعَالَمِینَ` ({exc})")
+
+
+@app.on_message(filters.command(["kangroo"], ".") & filters.me, group=-70)
+async def kangroo_alias_handler(app, m: Message):
+    try:
+        response = requests.get("https://some-random-api.com/animal/kangaroo", timeout=10).json()
+        await app.send_photo(m.chat.id, response["image"], caption="Kangaroo ...", reply_to_message_id=m.id)
+    except Exception:
+        await m.edit_text("🦘 Kangaroo photo could not be fetched.")
+
 
 
 # ================= Tools Pro / Core Repair v7.1 =================
@@ -2891,21 +2982,44 @@ def mak():
 
 def job():
  a = json_read("data.json")
- jdatetime.set_locale('fa_IR')
- d = jdatetime.datetime.now().strftime("%a")
+ try:
+  jdatetime.set_locale('fa_IR')
+  d = jdatetime.datetime.now().strftime("%a")
+ except Exception:
+  d = ""
+ 
+ try:
+  current_clock = create_world_time(a) if "create_world_time" in globals() else create_time()
+ except Exception:
+  current_clock = create_time()
+
  if read("time.txt") != datetime.now(timezone("Asia/Tehran")).strftime("%H:%M"):
   try:
-   if (a["timename"] == "on"):app.invoke(functions.account.UpdateProfile(last_name=f'{create_time()}'))
-   if (a["timename2"] == "on"):app.invoke(functions.account.UpdateProfile(last_name=f'{create_time2()}'))
-   if (a["timebio"] == "on"):app.invoke(functions.account.UpdateProfile(about=f'{read("userbio.txt")} {create_time()}'))
-   if (a["timebio2"] == "on"):app.invoke(functions.account.UpdateProfile(about=f'{read("userbio.txt")} {create_time2()}'))
-   if (a["timebio3"] == "on"):app.invoke(functions.account.UpdateProfile(about=f'{moon_or_sun()} | {read("userbio.txt")} | {create_time2()} | {create_tarikh()}'))
-   if (a["timebio4"] == "on"):app.invoke(functions.account.UpdateProfile(about=f'{moon_or_sun()} | {read("userbio.txt")} | {create_time2()} | {create_tarikh()} | {d}'))
-   if (a["timebio5"] == "on"):app.invoke(functions.account.UpdateProfile(about=f'{love_emoji()} | {read("userbio.txt")} | {create_time2()} | {create_tarikh()} | {d}'))
-   if (a["timebio6"] == "on"):app.invoke(functions.account.UpdateProfile(about=f'فضولی شما در تاریخ {fozolidate()} در ساعت {fozolitime()} با موفقیت ثبت شد✅'))
-   if (a["fontname"] == "on"):app.invoke(functions.account.UpdateProfile(first_name=f'{fontinname(read("user.txt"))}'))
-  except :
-   pass
+   if (a.get("timename") == "on"):
+    app.invoke(functions.account.UpdateProfile(last_name=f'{current_clock}'))
+   if (a.get("timename2") == "on"):
+    app.invoke(functions.account.UpdateProfile(last_name=f'{create_time2()}'))
+   if (a.get("timebio") == "on"):
+    user_bio = read("userbio.txt") or ""
+    app.invoke(functions.account.UpdateProfile(about=f'{user_bio} {current_clock}'.strip()))
+   if (a.get("timebio2") == "on"):
+    user_bio = read("userbio.txt") or ""
+    app.invoke(functions.account.UpdateProfile(about=f'{user_bio} {create_time2()}'.strip()))
+   if (a.get("timebio3") == "on"):
+    user_bio = read("userbio.txt") or ""
+    app.invoke(functions.account.UpdateProfile(about=f'{user_bio} {create_time2()} {create_tarikh()}'.strip()))
+   if (a.get("timebio4") == "on"):
+    user_bio = read("userbio.txt") or ""
+    app.invoke(functions.account.UpdateProfile(about=f'{user_bio} {create_time2()} {create_tarikh()} {d}'.strip()))
+   if (a.get("timebio5") == "on"):
+    user_bio = read("userbio.txt") or ""
+    app.invoke(functions.account.UpdateProfile(about=f'{love_emoji()} {user_bio} {create_time2()} {create_tarikh()} {d}'.strip()))
+   if (a.get("timebio6") == "on"):
+    app.invoke(functions.account.UpdateProfile(about=f'فضولی شما در تاریخ {fozolidate()} در ساعت {fozolitime()} ثبت شد✅'))
+   if (a.get("fontname") == "on"):
+    app.invoke(functions.account.UpdateProfile(first_name=f'{fontinname(read("user.txt"))}'))
+  except Exception as e:
+   print(f"Time background job error: {e}")
   write("time.txt" , datetime.now(timezone("Asia/Tehran")).strftime("%H:%M"))
 
 def antidelmember():
