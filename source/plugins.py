@@ -1,3 +1,71 @@
+
+import pytz
+from datetime import datetime
+
+WORLD_CLOCK_COUNTRIES = {
+    "ir": {"flag": "🇮🇷", "fa_name": "ایران", "en_name": "Iran", "tz": "Asia/Tehran"},
+    "de": {"flag": "🇩🇪", "fa_name": "آلمان", "en_name": "Germany", "tz": "Europe/Berlin"},
+    "us": {"flag": "🇺🇸", "fa_name": "آمریکا", "en_name": "USA", "tz": "America/New_York"},
+    "gb": {"flag": "🇬🇧", "fa_name": "انگلیس", "en_name": "UK", "tz": "Europe/London"},
+    "jp": {"flag": "🇯🇵", "fa_name": "ژاپن", "en_name": "Japan", "tz": "Asia/Tokyo"},
+    "fr": {"flag": "🇫🇷", "fa_name": "فرانسه", "en_name": "France", "tz": "Europe/Paris"},
+    "ca": {"flag": "🇨🇦", "fa_name": "کانادا", "en_name": "Canada", "tz": "America/Toronto"},
+    "ae": {"flag": "🇦🇪", "fa_name": "امارات", "en_name": "UAE", "tz": "Asia/Dubai"},
+    "tr": {"flag": "🇹🇷", "fa_name": "ترکیه", "en_name": "Turkey", "tz": "Europe/Istanbul"},
+    "ru": {"flag": "🇷🇺", "fa_name": "روسیه", "en_name": "Russia", "tz": "Europe/Moscow"},
+    "cn": {"flag": "🇨🇳", "fa_name": "چین", "en_name": "China", "tz": "Asia/Shanghai"},
+    "kr": {"flag": "🇰🇷", "fa_name": "کره جنوبی", "en_name": "South Korea", "tz": "Asia/Seoul"},
+    "it": {"flag": "🇮🇹", "fa_name": "ایتالیا", "en_name": "Italy", "tz": "Europe/Rome"},
+    "es": {"flag": "🇪🇸", "fa_name": "اسپانیا", "en_name": "Spain", "tz": "Europe/Madrid"},
+    "au": {"flag": "🇦🇺", "fa_name": "استرالیا", "en_name": "Australia", "tz": "Australia/Sydney"},
+    "br": {"flag": "🇧🇷", "fa_name": "برزیل", "en_name": "Brazil", "tz": "America/Sao_Paulo"},
+}
+
+WORLD_CLOCK_FONTS = {
+    "bold": {"name": "توپر / Bold", "sample": "𝟐𝟏:𝟒𝟐", "digits": "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"},
+    "sans_bold": {"name": "سنس بولد / Sans", "sample": "𝟮𝟭:𝟰𝟮", "digits": "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"},
+    "double": {"name": "دو خط / Double", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
+    "monospace": {"name": "مونو اسپیس / Mono", "sample": "𝟸𝟷:𝟺𝟸", "digits": "₀₁₂₃₄₅₆₇₈₉"},
+    "persian": {"name": "فارسی / Persian", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
+    "circled": {"name": "دایره‌ای / Circled", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
+    "parenthesized": {"name": "پرانتزی / Paren", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
+    "subscript": {"name": "زیرنویس / Sub", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
+    "superscript": {"name": "بالانویس / Super", "sample": "²¹:⁴²", "digits": "⁰¹²³⁴⁵⁶⁷⁸⁹"},
+    "standard": {"name": "ساده / Standard", "sample": "21:42", "digits": "0123456789"},
+}
+
+def format_country_clock(country_code="ir", font_style="bold", show_flag=True, show_name=True, lang="fa"):
+    c = WORLD_CLOCK_COUNTRIES.get(country_code, WORLD_CLOCK_COUNTRIES["ir"])
+    try:
+        tz = pytz.timezone(c["tz"])
+    except Exception:
+        tz = pytz.timezone("Asia/Tehran")
+    now = datetime.now(tz)
+    raw_time = now.strftime("%H:%M")
+    
+    font_info = WORLD_CLOCK_FONTS.get(font_style, WORLD_CLOCK_FONTS["bold"])
+    font_digits = font_info["digits"]
+    std_digits = "0123456789"
+    styled_time = "".join(font_digits[int(ch)] if ch in std_digits else ch for ch in raw_time)
+    
+    parts = []
+    if show_flag:
+        parts.append(c["flag"])
+    if show_name:
+        parts.append(c["fa_name"] if lang == "fa" else c["en_name"])
+    parts.append(styled_time)
+    return " ".join(parts)
+
+def create_world_time(data=None):
+    data = data or {}
+    cc = data.get("clock_country", "ir")
+    f_style = data.get("clock_font", "bold")
+    s_flag = data.get("clock_show_flag", True)
+    s_name = data.get("clock_show_name", True)
+    lang = data.get("clock_lang", "fa")
+    return format_country_clock(cc, f_style, s_flag, s_name, lang)
+
+
 from requests import get,post
 from os import name
 from threading import Thread
