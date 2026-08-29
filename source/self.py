@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-25-worldclock-luxury-v9-0"
+FIX_VERSION = "2026-08-25-titan-worldclock-interactive-v10-0"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -1105,64 +1105,200 @@ async def noprefix_command_bridge(app, message: Message):
 
 
 
-# ================= WORLD CLOCK PRO MANAGEMENT =================
+# ================= WORLD CLOCK PRO INTERACTIVE INLINE PANEL =================
+
+def _build_wclock_main_card(data):
+    cc = data.get("clock_country", "ir")
+    f_st = data.get("clock_font", "bold")
+    s_fl = data.get("clock_show_flag", True)
+    s_nm = data.get("clock_show_name", True)
+    c_info = WORLD_CLOCK_COUNTRIES.get(cc, WORLD_CLOCK_COUNTRIES["ir"])
+    f_info = WORLD_CLOCK_FONTS.get(f_st, WORLD_CLOCK_FONTS["bold"])
+    
+    preview_fa = format_country_clock(cc, f_st, s_fl, s_nm, "fa")
+    preview_en = format_country_clock(cc, f_st, s_fl, s_nm, "en")
+    
+    t_name_status = "روشن ✅" if data.get("timename") == "on" else "خاموش ❌"
+    t_bio_status = "روشن ✅" if data.get("timebio") == "on" else "خاموش ❌"
+    flag_status = "فعال ✅" if s_fl else "غیرفعال ❌"
+    name_status = "فعال ✅" if s_nm else "غیرفعال ❌"
+
+    card = f"""╭━━━ 🌍 <b>TiTaN World Clock Pro</b> ━━━╮
+┃ <b>کشور انتخابی:</b> {c_info['flag']} {c_info['fa_name']} ({c_info['en_name']})
+┃ <b>فونت انتخابی:</b> {f_info['sample']} ({f_info['name']})
+┃ <b>وضعیت پرچم:</b> {flag_status}
+┃ <b>وضعیت نام کشور:</b> {name_status}
+┃ <b>پیش‌نمایش زنده:</b> <code>{preview_fa}</code>
+┃ ━━━━━━━━━━━━━━━━━━━━
+┃ <b>ساعت روی اسم:</b> {t_name_status}
+┃ <b>ساعت روی بیو:</b> {t_bio_status}
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+<i>تنظیمات را با لمس دکمه‌های زیر تغییر دهید:</i>"""
+    return card
+
+def _build_wclock_main_keyboard(data, user_id):
+    uid = str(user_id)
+    t_name_btn = "👤 ساعت اسم: روشن ✅" if data.get("timename") == "on" else "👤 ساعت اسم: خاموش ❌"
+    t_bio_btn = "📝 ساعت بیو: روشن ✅" if data.get("timebio") == "on" else "📝 ساعت بیو: خاموش ❌"
+    flag_btn = "🚩 پرچم: فعال ✅" if data.get("clock_show_flag", True) else "🚩 پرچم: غیرفعال ❌"
+    cname_btn = "🏷 نام کشور: فعال ✅" if data.get("clock_show_name", True) else "🏷 نام کشور: غیرفعال ❌"
+    
+    rows = [
+        [
+            InlineKeyboardButton(t_name_btn, callback_data=f"wclk:tog:name:{uid}"),
+            InlineKeyboardButton(t_bio_btn, callback_data=f"wclk:tog:bio:{uid}"),
+        ],
+        [
+            InlineKeyboardButton(flag_btn, callback_data=f"wclk:tog:flag:{uid}"),
+            InlineKeyboardButton(cname_btn, callback_data=f"wclk:tog:cname:{uid}"),
+        ],
+        [
+            InlineKeyboardButton("🌍 انتخاب کشور (۱۶ کشور)", callback_data=f"wclk:menu:c:{uid}"),
+            InlineKeyboardButton("🔤 انتخاب فونت ساعت", callback_data=f"wclk:menu:f:{uid}"),
+        ],
+        [
+            InlineKeyboardButton("🔄 اعمال و آپدیت پروفایل", callback_data=f"wclk:apply:{uid}"),
+            InlineKeyboardButton("✖ بستن پنل", callback_data=f"wclk:close:{uid}"),
+        ]
+    ]
+    return InlineKeyboardMarkup(rows)
+
+def _build_wclock_country_keyboard(user_id):
+    uid = str(user_id)
+    c_keys = list(WORLD_CLOCK_COUNTRIES.keys())
+    rows = []
+    for i in range(0, len(c_keys), 4):
+        row = []
+        for k in c_keys[i:i+4]:
+            c = WORLD_CLOCK_COUNTRIES[k]
+            row.append(InlineKeyboardButton(f"{c['flag']} {c['fa_name']}", callback_data=f"wclk:set:c:{k}:{uid}"))
+        rows.append(row)
+    rows.append([InlineKeyboardButton("🔙 بازگشت به تنظیمات ساعت", callback_data=f"wclk:menu:main:{uid}")])
+    return InlineKeyboardMarkup(rows)
+
+def _build_wclock_font_keyboard(user_id):
+    uid = str(user_id)
+    f_keys = list(WORLD_CLOCK_FONTS.keys())
+    rows = []
+    for i in range(0, len(f_keys), 2):
+        row = []
+        for k in f_keys[i:i+2]:
+            f = WORLD_CLOCK_FONTS[k]
+            row.append(InlineKeyboardButton(f"{f['sample']} ({f['name'].split('/')[0].strip()})", callback_data=f"wclk:set:f:{k}:{uid}"))
+        rows.append(row)
+    rows.append([InlineKeyboardButton("🔙 بازگشت به تنظیمات ساعت", callback_data=f"wclk:menu:main:{uid}")])
+    return InlineKeyboardMarkup(rows)
+
 @app.on_message(filters.command(["worldclock", "clock", "countrytime", "ساعت"], ".") & filters.me, group=-70)
 async def world_clock_command(app, m: Message):
     data = json_read("data.json")
-    text = (m.text or "").strip()
-    parts = text.split()
+    card_text = _build_wclock_main_card(data)
+    kb = _build_wclock_main_keyboard(data, m.from_user.id if m.from_user else "0")
+    try:
+        await m.edit_text(card_text, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+    except Exception:
+        await m.reply_text(card_text, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+
+@app.on_callback_query(filters.regex(r"^wclk:"), group=-65)
+async def world_clock_callback(app, call):
+    parts = call.data.split(":")
+    action = parts[1] if len(parts) > 1 else ""
+    target_uid = parts[-1] if len(parts) > 2 else "0"
     
-    # Subcommands: .worldclock set COUNTRY_CODE FONT_STYLE
-    # e.g. .worldclock set ir bold
-    # e.g. .worldclock set de sans_bold
-    if len(parts) >= 2 and parts[1].lower() in ["list", "کشورها", "لیست"]:
-        rows = [f"• `{k}`: {v['flag']} {v['fa_name']} ({v['en_name']})" for k, v in WORLD_CLOCK_COUNTRIES.items()]
-        await m.edit_text("<b>🌍 لیست ۱۶ کشور ساعت جهانی:</b>\n\n" + "\n".join(rows) + "\n\n<b>نحوه تنظیم:</b> `.worldclock ir bold`")
+    if call.from_user and target_uid != "0" and int(call.from_user.id) != int(target_uid):
+        await call.answer("دسترسی غیر مجاز 🚫", show_alert=False)
         return
 
-    if len(parts) >= 2 and parts[1].lower() in ["fonts", "فونت", "فونت‌ها"]:
-        rows = [f"• `{k}`: {v['sample']} ({v['name']})" for k, v in WORLD_CLOCK_FONTS.items()]
-        await m.edit_text("<b>🔤 لیست فونت‌های شیک ساعت:</b>\n\n" + "\n".join(rows) + "\n\n<b>نحوه تنظیم:</b> `.worldclock ir bold`")
+    data = json_read("data.json")
+
+    # 1. Toggles (Single button switches)
+    if action == "tog":
+        sub = parts[2]
+        if sub == "name":
+            cur = data.get("timename", "off")
+            data["timename"] = "off" if cur == "on" else "on"
+        elif sub == "bio":
+            cur = data.get("timebio", "off")
+            data["timebio"] = "off" if cur == "on" else "on"
+        elif sub == "flag":
+            cur = data.get("clock_show_flag", True)
+            data["clock_show_flag"] = not cur
+        elif sub == "cname":
+            cur = data.get("clock_show_name", True)
+            data["clock_show_name"] = not cur
+        write("data.json", json.dumps(data, ensure_ascii=False))
+        card = _build_wclock_main_card(data)
+        kb = _build_wclock_main_keyboard(data, call.from_user.id)
+        try:
+            await call.edit_message_text(card, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+        except Exception:
+            pass
+        await call.answer("تنظیمات با موفقیت تغییر کرد ✅")
         return
 
-    if len(parts) >= 3:
-        country_code = parts[1].lower()
-        font_style = parts[2].lower()
-        if country_code in WORLD_CLOCK_COUNTRIES and font_style in WORLD_CLOCK_FONTS:
-            data["clock_country"] = country_code
-            data["clock_font"] = font_style
+    # 2. Menus
+    if action == "menu":
+        sub = parts[2]
+        if sub == "c":
+            await call.edit_message_text("<b>🌍 انتخاب کشور ساعت (۱۶ کشور با تایم‌زون رسمی):</b>", parse_mode=enums.ParseMode.HTML, reply_markup=_build_wclock_country_keyboard(call.from_user.id))
+        elif sub == "f":
+            await call.edit_message_text("<b>🔤 انتخاب فونت ساعت (پیش‌نمایش زنده روی دکمه‌ها):</b>", parse_mode=enums.ParseMode.HTML, reply_markup=_build_wclock_font_keyboard(call.from_user.id))
+        elif sub == "main":
+            card = _build_wclock_main_card(data)
+            kb = _build_wclock_main_keyboard(data, call.from_user.id)
+            await call.edit_message_text(card, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+        await call.answer()
+        return
+
+    # 3. Set Country or Font
+    if action == "set":
+        sub = parts[2]
+        val = parts[3]
+        if sub == "c":
+            data["clock_country"] = val
             write("data.json", json.dumps(data, ensure_ascii=False))
-            preview = format_country_clock(country_code, font_style, True, True, "fa")
-            await m.edit_text(f"<b>🌍 ساعت کشور {WORLD_CLOCK_COUNTRIES[country_code]['flag']} {WORLD_CLOCK_COUNTRIES[country_code]['fa_name']} با موفقیت تنظیم شد:</b>\n\n<b>پیش‌نمایش:</b> <code>{preview}</code>\n\nجهت فعال‌سازی روی اسم: `.timename on`\nجهت فعال‌سازی روی بیو: `.timebio on`")
+            card = _build_wclock_main_card(data)
+            kb = _build_wclock_main_keyboard(data, call.from_user.id)
+            await call.edit_message_text(card, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+            c = WORLD_CLOCK_COUNTRIES.get(val, {})
+            await call.answer(f"کشور به {c.get('flag','')} {c.get('fa_name','')} تغییر یافت ✅")
+        elif sub == "f":
+            data["clock_font"] = val
+            write("data.json", json.dumps(data, ensure_ascii=False))
+            card = _build_wclock_main_card(data)
+            kb = _build_wclock_main_keyboard(data, call.from_user.id)
+            await call.edit_message_text(card, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+            f_inf = WORLD_CLOCK_FONTS.get(val, {})
+            await call.answer(f"فونت به {f_inf.get('sample','')} تغییر یافت ✅")
+        return
+
+    # 4. Instant Apply Profile Update
+    if action == "apply":
+        current_clock = create_world_time(data)
+        applied = []
+        try:
+            if data.get("timename") == "on":
+                await app.invoke(functions.account.UpdateProfile(last_name=f'{current_clock}'))
+                applied.append("نام")
+            if data.get("timebio") == "on":
+                user_bio = read("userbio.txt") or ""
+                await app.invoke(functions.account.UpdateProfile(about=f'{user_bio} {current_clock}'.strip()))
+                applied.append("بیو")
+        except Exception as e:
+            await call.answer(f"خطا در اعمال: {e}", show_alert=True)
             return
+        msg = f"✅ ساعت {current_clock} با موفقیت روی {' و '.join(applied) if applied else 'پروفایل'} اعمال شد!"
+        await call.answer(msg, show_alert=True)
+        return
 
-    # Default overview & live preview
-    cc = data.get("clock_country", "ir")
-    f_st = data.get("clock_font", "bold")
-    c_info = WORLD_CLOCK_COUNTRIES.get(cc, WORLD_CLOCK_COUNTRIES["ir"])
-    f_info = WORLD_CLOCK_FONTS.get(f_st, WORLD_CLOCK_FONTS["bold"])
-    preview_fa = format_country_clock(cc, f_st, True, True, "fa")
-    preview_en = format_country_clock(cc, f_st, True, True, "en")
-    
-    t_name = data.get("timename", "off").upper()
-    t_bio = data.get("timebio", "off").upper()
-
-    card = f"""╭━━━ 🌍 <b>TiTaN World Clock</b> ━━━╮
-┃ <b>کشور انتخابی:</b> {c_info['flag']} {c_info['fa_name']} ({c_info['en_name']})
-┃ <b>فونت انتخابی:</b> {f_info['name']}
-┃ <b>پیش‌نمایش فارسی:</b> <code>{preview_fa}</code>
-┃ <b>پیش‌نمایش انگلیسی:</b> <code>{preview_en}</code>
-┃ <b>وضعیت ساعت روی نام:</b> <code>{t_name}</code>
-┃ <b>وضعیت ساعت روی بیو:</b> <code>{t_bio}</code>
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
-<i>دستورات تنظیم:</i>
-• مشاهده کشورها: `.worldclock list`
-• مشاهده فونت‌ها: `.worldclock fonts`
-• تنظیم ساعت: `.worldclock ir bold` یا `.worldclock de sans_bold`
-• فعال‌سازی روی اسم: `.timename on/off`
-• فعال‌سازی روی بیو: `.timebio on/off`"""
-    await m.edit_text(card, parse_mode=enums.ParseMode.HTML)
-
+    # 5. Close
+    if action == "close":
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.answer("پنل بسته شد")
+        return
 
 # ================= ZEKR & KANGAROO HANDLERS =================
 _ZEKR_DAYS = {
