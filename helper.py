@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-25-titan-luxury-autoinsert-v9-0"
+FIX_VERSION = "2026-08-25-titan-2col-buttons-v10-0"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -3091,22 +3091,39 @@ async def call(app, call):
                 await call.answer()
                 return
 
-            # 3. Persian Category Handlers with Luxury Text & Auto-Insert Buttons
+            # 3. Persian Category Handlers with 2-Column Grid Text & Buttons
             fa_action_to_cat = {
-                "global_person1": "gp", "profile1": "profile", "downloader1": "downloader",
-                "uploader1": "uploader", "text_mode1": "textmode", "action_mode1": "actionmode",
-                "webhook1": "webhook", "locks1": "locks", "cronjob1": "cronjob",
-                "antilogin1": "antilogin", "tabchi1": "tabchi", "photo_editor1": "photoeditor",
-                "marker1": "marker", "compiler1": "compiler", "tools1": "tools",
-                "account1": "account", "book1": "book", "fun1": "fun",
-                "market1": "market", "photo_gif1": "photogif", "ai1": "ai",
-                "photo1": "photo", "music1": "music", "system1": "system",
+                "global_person1": ("gp", fahelp1), "profile1": ("profile", fahelp2), "downloader1": ("downloader", fahelp3),
+                "uploader1": ("uploader", fahelp4), "text_mode1": ("textmode", fahelp5), "action_mode1": ("actionmode", fahelp6),
+                "webhook1": ("webhook", fahelp7), "locks1": ("locks", fahelp8), "cronjob1": ("cronjob", fahelp9),
+                "antilogin1": ("antilogin", fahelp10), "tabchi1": ("tabchi", fahelp11), "photo_editor1": ("photoeditor", fahelp12),
+                "marker1": ("marker", fahelp13), "compiler1": ("compiler", fahelp14), "tools1": ("tools", fahelp15),
+                "account1": ("account", fahelp16), "book1": ("book", fahelp17), "fun1": ("fun", fahelp18),
+                "market1": ("market", fahelp19), "photo_gif1": ("photogif", fahelp20), "ai1": ("ai", fahelp21),
+                "photo1": ("photo", fahelp22), "music1": ("music", fahelp23), "system1": ("system", fahelp24),
             }
             if action in fa_action_to_cat:
-                cat_k = fa_action_to_cat[action]
-                luxury_txt = _titan_category_header(cat_k, "fa")
+                cat_k, h_txt = fa_action_to_cat[action]
                 kb = _titan_category_keyboard(cat_k, "fa", call.from_user.id)
-                await _titan_edit_inline_or_chat(app, call, text=luxury_txt, reply_markup=kb)
+                await _titan_edit_inline_or_chat(app, call, text=h_txt, reply_markup=kb)
+                await call.answer()
+                return
+
+            # 4. English Category Handlers with 2-Column Grid Text & Buttons
+            en_action_to_cat = {
+                "global_person2": ("gp", enhelp1), "profile2": ("profile", enhelp2), "downloader2": ("downloader", enhelp3),
+                "uploader2": ("uploader", enhelp4), "text_mode2": ("textmode", enhelp5), "action_mode2": ("actionmode", enhelp6),
+                "webhook2": ("webhook", enhelp7), "locks2": ("locks", enhelp8), "cronjob2": ("cronjob", enhelp9),
+                "antilogin2": ("antilogin", enhelp10), "tabchi2": ("tabchi", enhelp11), "photo_editor2": ("photoeditor", enhelp12),
+                "marker2": ("marker", enhelp13), "compiler2": ("compiler", enhelp14), "tools2": ("tools", enhelp15),
+                "account2": ("account", enhelp16), "book2": ("book", enhelp17), "fun2": ("fun", enhelp18),
+                "market2": ("market", enhelp19), "photo_gif2": ("photogif", enhelp20), "ai2": ("ai", enhelp21),
+                "photo2": ("photo", enhelp22), "music2": ("music", enhelp23), "system2": ("system", enhelp24),
+            }
+            if action in en_action_to_cat:
+                cat_k, h_txt = en_action_to_cat[action]
+                kb = _titan_category_keyboard(cat_k, "en", call.from_user.id)
+                await _titan_edit_inline_or_chat(app, call, text=h_txt, reply_markup=kb)
                 await call.answer()
                 return
 
