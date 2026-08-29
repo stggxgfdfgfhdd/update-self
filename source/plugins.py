@@ -2,6 +2,9 @@
 import pytz
 from datetime import datetime
 
+import pytz
+from datetime import datetime
+
 WORLD_CLOCK_COUNTRIES = {
     "ir": {"flag": "🇮🇷", "fa_name": "ایران", "en_name": "Iran", "tz": "Asia/Tehran"},
     "de": {"flag": "🇩🇪", "fa_name": "آلمان", "en_name": "Germany", "tz": "Europe/Berlin"},
@@ -24,11 +27,11 @@ WORLD_CLOCK_COUNTRIES = {
 WORLD_CLOCK_FONTS = {
     "bold": {"name": "توپر / Bold", "sample": "𝟐𝟏:𝟒𝟐", "digits": "𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗"},
     "sans_bold": {"name": "سنس بولد / Sans", "sample": "𝟮𝟭:𝟰𝟮", "digits": "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"},
-    "double": {"name": "دو خط / Double", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
-    "monospace": {"name": "مونو اسپیس / Mono", "sample": "𝟸𝟷:𝟺𝟸", "digits": "₀₁₂₃₄₅₆₇₈₉"},
-    "persian": {"name": "فارسی / Persian", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
-    "circled": {"name": "دایره‌ای / Circled", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
-    "parenthesized": {"name": "پرانتزی / Paren", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
+    "double": {"name": "دو خط / Double", "sample": "𝟚𝟙:𝟜𝟚", "digits": "𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡"},
+    "monospace": {"name": "مونو اسپیس / Mono", "sample": "𝟸𝟷:𝟺𝟸", "digits": "𝟶𝟷𝟸𝟹𝟺𝟻𝟼𝟽𝟾𝟿"},
+    "persian": {"name": "فارسی / Persian", "sample": "۲۱:۴۲", "digits": "۰۱۲۳۴۵۶۷۸۹"},
+    "circled": {"name": "دایره‌ای / Circled", "sample": "②①:④②", "digits": "⓪①②③④⑤⑥⑦⑧⑨"},
+    "parenthesized": {"name": "پرانتزی / Paren", "sample": "⑴⑵:⑶⑷", "digits": "🄀⑴⑵⑶⑷⑸⑹⑺⑻⑼"},
     "subscript": {"name": "زیرنویس / Sub", "sample": "₂₁:₄₂", "digits": "₀₁₂₃₄₅₆₇₈₉"},
     "superscript": {"name": "بالانویس / Super", "sample": "²¹:⁴²", "digits": "⁰¹²³⁴⁵⁶⁷⁸⁹"},
     "standard": {"name": "ساده / Standard", "sample": "21:42", "digits": "0123456789"},
