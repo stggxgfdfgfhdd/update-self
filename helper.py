@@ -772,94 +772,64 @@ fahelp1 = """╭━━━ ⚡ TiTaN SelfSaz ━━━╮
 ╰━━━━━━━━━━━━━━━━━━━━━━╯
 
 🔇 سکوت کاربر       │ 🔊 رفع سکوت
-   `.mute`          │    `.unmute`
 
 🧹 پاکسازی سکوت     │ 🚫 بلاک کاربر
-   `.allunmute`     │    `.block`
 
 🔓 رفع بلاک         │ ☠️ افزودن دشمن
-   `.unblock`       │    `.setenemy`
 
 🗑 حذف دشمن        │ 🧹 پاکسازی دشمن
-   `.delenemy`      │    `.clearenemy`
 
 ❤️ افزودن عشق       │ 💔 حذف عشق
-   `.setlove`       │    `.dellove`
 
 🧹 پاکسازی عشق      │ 💬 منشی خودکار
-   `.clearlove`     │    `.monshi`
 
 🔕 خاموشی منشی      │ 🌙 حالت آفلاین
-   `.monshioff`     │    `.afk`
 
 ☀️ لغو آفلاین       │ 🔔 هشدار تگ
-   `.unafk`         │    `.tagalert`
 
 📢 ساخت کانال       │ 👥 ساخت گروه
-   `.creatchannel`  │    `.creatgroup`
 
 👑 ساخت سوپرگروه    │ ⚡ اسپم پیام
-   `.creatsupergroup`│   `.spam`
 
 🐢 اسپم آرام        │ 👻 اسپم مخفی
-   `.slowspam`      │    `.statspam`
 
 🚀 اسپم سریع        │ 🥇 پیام اول چت
-   `.fastspam`      │    `.firstcom`
 
 💬 ارسال پیام اول   │ ⏰ ارسال زماندار
-   `.first_message` │    `.text_time`
 
 📸 عکس زماندار      │ ⏱ زماندار ریپلی
-   `.photo_time`    │    `.text_send_time`
 
 🖼 عکس ریپلی زمان   │ 🤖 پاسخ خودکار
-   `.photo_send_time`│   `.answer`
 
 ➕ افزودن پاسخ      │ ➖ حذف پاسخ
-   `.addan`         │    `.delan`
 
 📋 لیست پاسخ‌ها     │ 🧹 پاکسازی پاسخ
-   `.anlist`        │    `.anclear`
 
 👋 خوشامدگویی       │ ➕ تنظیم خوشامد
-   `.welcome`       │    `.welcome_add`
 
 👁 نمایش خوشامد     │ 🔄 ریست خوشامد
-   `.welcome_show`  │    `.welcome_reset`
 
 ⛔ بن کاربر         │ ❇️ آنبن کاربر
-   `.ban`           │    `.unban`
 
 🔇 میوت گروه        │ 🔊 آنمیوت گروه
-   `.setmute`       │    `.delmute`
 
 🖼 عکس گروه         │ 📝 نام گروه
-   `.setchatphoto`  │    `.setchattitle`
 
 📄 بیو گروه         │ 🔗 یوزرنیم گروه
-   `.setchatbio`    │    `.setchatusername`
 
 📌 پین پیام         │ 📍 آنپین پیام
-   `.pin`           │    `.unpin`
 
 📍 آنپین همه        │ 🗑 حذف کانال
-   `.unpinall`      │    `.deletechannel`
 
 🗑 حذف گروه         │ 🧹 پاکسازی کاربر
-   `.deletegroup`   │    `.delallmsguser`
 
 ⏳ اسلومود چت       │ ❌ حذف پیام‌ها
-   `.slowmod`       │    `.delete`
 
 👮 لیست ادمین‌ها    │ 📣 تگ سراسری
-   `.tadmin`        │    `.tagall`
 
 🛑 لغو عملیات       │ 🗑 حذف تاریخچه
-   `.cancel`        │    `.delethistory`
 
 🗑 حذف تک پیام      │
-   `.del`           │"""
 
 enhelp1 = """╭━━━ ⚡ TiTaN SelfSaz ━━━╮
 ┃ 🇬🇧 Section: Global - Personal
