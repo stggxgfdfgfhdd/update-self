@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-25-titan-direct-ai-clocksetting-v11-0"
+FIX_VERSION = "2026-08-25-titan-definitive-v12-0"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -6058,6 +6058,35 @@ async def safe_love_commands(app, message: Message):
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @app.on_message(filters.command(["filter"], ".") | filters.me & users)
+# ================= PILLOW LOCAL PHOTO EDITOR FILTERS =================
+@app.on_message(filters.command(["blue", "green", "red", "grey", "grey2", "sepia", "threshold", "blur", "pixel", "blurple", "filter"], ".") & filters.me, group=-60)
+async def pillow_photo_filters(app, m: Message):
+    cmd = m.command[0].lower() if getattr(m, "command", None) else (m.text or "").split()[0].lstrip(".")
+    replied = m.reply_to_message
+    if not replied or not getattr(replied, "photo", None):
+        await m.edit_text(f"❖ لطفاً روی یک عکس ریپلی کنید: `.{cmd}`")
+        return
+    await m.edit_text(f"🎨 <i>در حال اعمال افکت {cmd}...</i>", parse_mode=enums.ParseMode.HTML)
+    try:
+        os.makedirs("/tmp/self_photos", exist_ok=True)
+        raw_path = await app.download_media(replied, file_name="/tmp/self_photos/")
+        if not raw_path or not os.path.isfile(raw_path):
+            await m.edit_text("❌ خطا در دریافت فایل عکس.")
+            return
+        out_path = apply_pillow_filter(raw_path, cmd)
+        await app.send_photo(m.chat.id, out_path, caption=f"✨ Filter applied: `{cmd}`", reply_to_message_id=replied.id)
+        try:
+            await m.delete()
+        except Exception:
+            pass
+        try:
+            if os.path.isfile(raw_path): os.remove(raw_path)
+            if os.path.isfile(out_path): os.remove(out_path)
+        except Exception:
+            pass
+    except Exception as exc:
+        await m.edit_text(f"❌ خطا در پردازش تصویر: `{exc}`")
+
 async def green(app, m: Message):
     filt = m.text.split(None, 1)[1]
     replied = m.reply_to_message
