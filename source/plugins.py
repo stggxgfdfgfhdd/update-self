@@ -5,6 +5,10 @@ from datetime import datetime
 import pytz
 from datetime import datetime
 
+import pytz, io, html, urllib.parse
+from datetime import datetime
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance
+
 WORLD_CLOCK_COUNTRIES = {
     "ir": {"flag": "🇮🇷", "fa_name": "ایران", "en_name": "Iran", "tz": "Asia/Tehran"},
     "de": {"flag": "🇩🇪", "fa_name": "آلمان", "en_name": "Germany", "tz": "Europe/Berlin"},
@@ -67,6 +71,48 @@ def create_world_time(data=None):
     s_name = data.get("clock_show_name", True)
     lang = data.get("clock_lang", "fa")
     return format_country_clock(cc, f_style, s_flag, s_name, lang)
+
+def apply_pillow_filter(input_path, filter_name):
+    """Process image filters locally with 100% offline reliability."""
+    try:
+        img = Image.open(input_path).convert("RGB")
+        out_path = input_path + "_filtered.jpg"
+        fn = filter_name.lower()
+        if fn == "blue":
+            r, g, b = img.split()
+            res = Image.merge("RGB", (Image.eval(r, lambda x: int(x * 0.2)), Image.eval(g, lambda x: int(x * 0.4)), Image.eval(b, lambda x: min(255, int(x * 1.5)))))
+        elif fn == "green":
+            r, g, b = img.split()
+            res = Image.merge("RGB", (Image.eval(r, lambda x: int(x * 0.2)), Image.eval(g, lambda x: min(255, int(x * 1.5))), Image.eval(b, lambda x: int(x * 0.2))))
+        elif fn == "red":
+            r, g, b = img.split()
+            res = Image.merge("RGB", (Image.eval(r, lambda x: min(255, int(x * 1.6))), Image.eval(g, lambda x: int(x * 0.2)), Image.eval(b, lambda x: int(x * 0.2))))
+        elif fn in ["grey", "gray", "grey1"]:
+            res = ImageOps.grayscale(img).convert("RGB")
+        elif fn in ["grey2", "gray2"]:
+            grey = ImageOps.grayscale(img)
+            res = ImageEnhance.Contrast(grey.convert("RGB")).enhance(1.8)
+        elif fn == "sepia":
+            grey = ImageOps.grayscale(img)
+            res = ImageOps.colorize(grey, "#2c1c08", "#f4ecd8")
+        elif fn == "threshold":
+            grey = ImageOps.grayscale(img)
+            res = grey.point(lambda p: 255 if p > 128 else 0).convert("RGB")
+        elif fn == "blur":
+            res = img.filter(ImageFilter.GaussianBlur(radius=7))
+        elif fn == "pixel":
+            small = img.resize((max(8, img.width // 12), max(8, img.height // 12)), Image.Resampling.NEAREST)
+            res = small.resize(img.size, Image.Resampling.NEAREST)
+        elif fn == "blurple":
+            grey = ImageOps.grayscale(img)
+            res = ImageOps.colorize(grey, "#4e5d94", "#ffffff")
+        else:
+            res = ImageEnhance.Color(img).enhance(1.5)
+        res.save(out_path, "JPEG", quality=92)
+        return out_path
+    except Exception as exc:
+        print(f"PIL filter error: {exc}")
+        return input_path
 
 
 from requests import get,post
@@ -454,4 +500,5 @@ def read_note(url):
     except Exception as er:
       b += f"\n({j}) --> ({er})"
   return b
+
 
