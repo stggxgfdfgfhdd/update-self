@@ -110,7 +110,7 @@ import pickle
 from pyrogram.errors.exceptions.bad_request_400 import ChatNotModified
 from pyrogram.types import ChatPermissions, Message
 
-FIX_VERSION = "2026-08-25-titan-worldclock-interactive-v10-0"
+FIX_VERSION = "2026-08-25-titan-direct-ai-clocksetting-v11-0"
 print(Fore.GREEN + f"Ultra Self self.py fix version: {FIX_VERSION}" + Fore.RESET)
 
 admin = sys.argv[1]
@@ -1188,6 +1188,54 @@ def _build_wclock_font_keyboard(user_id):
         rows.append(row)
     rows.append([InlineKeyboardButton("🔙 بازگشت به تنظیمات ساعت", callback_data=f"wclk:menu:main:{uid}")])
     return InlineKeyboardMarkup(rows)
+
+@app.on_message(filters.command(["settime", "ست تایم", "clocksetting"], ".") & filters.me, group=-70)
+async def settime_and_clocksetting_command(app, m: Message):
+    text = (m.text or "").strip()
+    parts = text.split()
+    cmd = parts[0].lower().lstrip(".")
+    
+    data = json_read("data.json")
+    
+    # If .clocksetting or .settime panel requested
+    if cmd == "clocksetting" or (len(parts) >= 2 and parts[1].lower() in ["panel", "setting", "تنظیمات"]):
+        card_text = _build_wclock_main_card(data)
+        kb = _build_wclock_main_keyboard(data, m.from_user.id if m.from_user else "0")
+        try:
+            await m.edit_text(card_text, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+        except Exception:
+            await m.reply_text(card_text, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
+        return
+
+    # Single button toggle for .settime / settime
+    cur_status = data.get("timename", "off")
+    if len(parts) >= 2:
+        arg = parts[1].lower()
+        if arg in ["on", "روشن", "فعال"]:
+            new_status = "on"
+        elif arg in ["off", "خاموش", "غیرفعال"]:
+            new_status = "off"
+        else:
+            new_status = "off" if cur_status == "on" else "on"
+    else:
+        new_status = "off" if cur_status == "on" else "on"
+
+    data["timename"] = new_status
+    write("data.json", json.dumps(data, ensure_ascii=False))
+    
+    clock_preview = create_world_time(data) if "create_world_time" in globals() else create_time()
+    if new_status == "on":
+        try:
+            await app.invoke(functions.account.UpdateProfile(last_name=f'{clock_preview}'))
+        except Exception:
+            pass
+        await m.edit_text(f"❖ ساعت روی نام اکانت: **روشن شد ✅**\n\n<b>پیش‌نمایش:</b> <code>{clock_preview}</code>\n\n<i>جهت تنظیم کشور و فونت:</i> `.clocksetting`", parse_mode=enums.ParseMode.HTML)
+    else:
+        try:
+            await app.invoke(functions.account.UpdateProfile(last_name=''))
+        except Exception:
+            pass
+        await m.edit_text("❖ ساعت روی نام اکانت: **خاموش شد ❌**")
 
 @app.on_message(filters.command(["worldclock", "clock", "countrytime", "ساعت"], ".") & filters.me, group=-70)
 async def world_clock_command(app, m: Message):
@@ -2342,6 +2390,58 @@ def _ai_parse_request(raw_prompt, data):
     return {"prompt": prompt, "persona": persona, "mode": mode, "route": route, "model": model}
 
 
+def _ai_format_clean_answer_html(answer, limit=3800):
+    text = str(answer or "").strip()
+    if not text:
+        return "پاسخی دریافت نشد."
+    if len(text) > limit:
+        text = text[:limit].rstrip() + "\n…"
+
+    code_blocks = []
+    def code_repl(m):
+        lang = (m.group(1) or "").strip()
+        code = m.group(2) or ""
+        code_esc = html.escape(code.strip())
+        placeholder = f"___CODE_BLOCK_{len(code_blocks)}___"
+        if lang:
+            code_blocks.append(f"<pre><code class=\"language-{html.escape(lang)}\">{code_esc}</code></pre>")
+        else:
+            code_blocks.append(f"<pre><code>{code_esc}</code></pre>")
+        return placeholder
+
+    text = re.sub(r"```([a-zA-Z0-9_+\-.]*)\n?(.*?)```", code_repl, text, flags=re.S)
+    text = html.escape(text)
+
+    # Convert blockquotes (lines starting with &gt; or >)
+    lines = text.split("\n")
+    processed_lines = []
+    in_quote = False
+    quote_buf = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("&gt;") or stripped.startswith(">"):
+            clean_l = re.sub(r"^(&gt;|>)\s*", "", line)
+            quote_buf.append(clean_l)
+            in_quote = True
+        else:
+            if in_quote:
+                processed_lines.append(f"<blockquote>{chr(10).join(quote_buf)}</blockquote>")
+                quote_buf = []
+                in_quote = False
+            processed_lines.append(line)
+    if in_quote:
+        processed_lines.append(f"<blockquote>{chr(10).join(quote_buf)}</blockquote>")
+
+    text = "\n".join(processed_lines)
+
+    for i, cb in enumerate(code_blocks):
+        text = text.replace(f"___CODE_BLOCK_{i}___", cb)
+
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.S)
+    text = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", text)
+    return text.strip()
+
 def _ai_format_answer_html(answer, limit=2800):
     raw = str(answer or "").strip()
     if len(raw) > limit:
@@ -2760,20 +2860,21 @@ async def ai_pro_text_majidapi(app, m: Message):
         raise StopPropagation
 
     started_at = time.time()
-    await _ai_edit(m, _ai_box("AI Assistant", [
-        ("Status", "Thinking…"),
-        ("Mode", req.get("mode", "auto")),
-        ("Route", req.get("route", "smart")),
-        ("Persona", req.get("persona", "professional")),
-        ("Prompt", clean_prompt[:140]),
-    ], footer="9Router"))
+    try:
+        await m.edit_text("💭 <i>در حال پردازش پاسخ هوش مصنوعی...</i>", parse_mode=enums.ParseMode.HTML)
+    except Exception:
+        pass
     try:
         answer, model = await _ai_text_request(clean_prompt, data, req)
         _ai_save_data(data)
-        req["model"] = model
-        req["elapsed"] = time.time() - started_at
-        card = _ai_minimal_card(clean_prompt, answer, req)
-        await _ai_edit_markup(m, card, reply_markup=_ai_inline_buttons())
+        clean_html = _ai_format_clean_answer_html(answer)
+        try:
+            await m.edit_text(clean_html, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+        except Exception:
+            try:
+                await m.reply_text(clean_html, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+            except Exception:
+                await m.edit_text(answer[:4000])
     except Exception as e:
         await _ai_error(m, "9Router AI", _format_ai_error(e), ".ai سلام")
     raise StopPropagation
