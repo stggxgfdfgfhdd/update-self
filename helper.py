@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-25-titan-clean-buttons-clocksetting-v11-0"
+FIX_VERSION = "2026-08-25-titan-clean-v12-0"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
