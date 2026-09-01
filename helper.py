@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-FIX_VERSION = "2026-08-25-titan-2col-buttons-v10-0"
+FIX_VERSION = "2026-08-25-titan-clean-buttons-clocksetting-v11-0"
 print(f"{Fore.GREEN}Ultra Self helper fix version: {FIX_VERSION}{Fore.RESET}")
 
 #================= Config =================#
@@ -772,64 +772,94 @@ fahelp1 = """╭━━━ ⚡ TiTaN SelfSaz ━━━╮
 ╰━━━━━━━━━━━━━━━━━━━━━━╯
 
 🔇 سکوت کاربر       │ 🔊 رفع سکوت
+   `.mute`          │    `.unmute`
 
 🧹 پاکسازی سکوت     │ 🚫 بلاک کاربر
+   `.allunmute`     │    `.block`
 
 🔓 رفع بلاک         │ ☠️ افزودن دشمن
+   `.unblock`       │    `.setenemy`
 
 🗑 حذف دشمن        │ 🧹 پاکسازی دشمن
+   `.delenemy`      │    `.clearenemy`
 
 ❤️ افزودن عشق       │ 💔 حذف عشق
+   `.setlove`       │    `.dellove`
 
 🧹 پاکسازی عشق      │ 💬 منشی خودکار
+   `.clearlove`     │    `.monshi`
 
 🔕 خاموشی منشی      │ 🌙 حالت آفلاین
+   `.monshioff`     │    `.afk`
 
 ☀️ لغو آفلاین       │ 🔔 هشدار تگ
+   `.unafk`         │    `.tagalert`
 
 📢 ساخت کانال       │ 👥 ساخت گروه
+   `.creatchannel`  │    `.creatgroup`
 
 👑 ساخت سوپرگروه    │ ⚡ اسپم پیام
+   `.creatsupergroup`│   `.spam`
 
 🐢 اسپم آرام        │ 👻 اسپم مخفی
+   `.slowspam`      │    `.statspam`
 
 🚀 اسپم سریع        │ 🥇 پیام اول چت
+   `.fastspam`      │    `.firstcom`
 
 💬 ارسال پیام اول   │ ⏰ ارسال زماندار
+   `.first_message` │    `.text_time`
 
 📸 عکس زماندار      │ ⏱ زماندار ریپلی
+   `.photo_time`    │    `.text_send_time`
 
 🖼 عکس ریپلی زمان   │ 🤖 پاسخ خودکار
+   `.photo_send_time`│   `.answer`
 
 ➕ افزودن پاسخ      │ ➖ حذف پاسخ
+   `.addan`         │    `.delan`
 
 📋 لیست پاسخ‌ها     │ 🧹 پاکسازی پاسخ
+   `.anlist`        │    `.anclear`
 
 👋 خوشامدگویی       │ ➕ تنظیم خوشامد
+   `.welcome`       │    `.welcome_add`
 
 👁 نمایش خوشامد     │ 🔄 ریست خوشامد
+   `.welcome_show`  │    `.welcome_reset`
 
 ⛔ بن کاربر         │ ❇️ آنبن کاربر
+   `.ban`           │    `.unban`
 
 🔇 میوت گروه        │ 🔊 آنمیوت گروه
+   `.setmute`       │    `.delmute`
 
 🖼 عکس گروه         │ 📝 نام گروه
+   `.setchatphoto`  │    `.setchattitle`
 
 📄 بیو گروه         │ 🔗 یوزرنیم گروه
+   `.setchatbio`    │    `.setchatusername`
 
 📌 پین پیام         │ 📍 آنپین پیام
+   `.pin`           │    `.unpin`
 
 📍 آنپین همه        │ 🗑 حذف کانال
+   `.unpinall`      │    `.deletechannel`
 
 🗑 حذف گروه         │ 🧹 پاکسازی کاربر
+   `.deletegroup`   │    `.delallmsguser`
 
 ⏳ اسلومود چت       │ ❌ حذف پیام‌ها
+   `.slowmod`       │    `.delete`
 
 👮 لیست ادمین‌ها    │ 📣 تگ سراسری
+   `.tadmin`        │    `.tagall`
 
 🛑 لغو عملیات       │ 🗑 حذف تاریخچه
+   `.cancel`        │    `.delethistory`
 
 🗑 حذف تک پیام      │
+   `.del`           │"""
 
 enhelp1 = """╭━━━ ⚡ TiTaN SelfSaz ━━━╮
 ┃ 🇬🇧 Section: Global - Personal
@@ -2235,20 +2265,10 @@ def build_data():
             ("setlastname", "👥 نام خانوادگی", "👥 Last Name", ".setlastname", "تنظیم نام خانوادگی حساب: .setlastname متن", "Set profile last name: .setlastname text"),
             ("setbio", "📝 بیوگرافی", "📝 Biography", ".setbio", "تنظیم متن بیوگرافی پروفایل: .setbio متن", "Set profile biography: .setbio text"),
             ("fontname", "🔤 فونت خودکار", "🔤 Auto Font", ".fontname", "اعمال فونت شیک خودکار روی نام: .fontname on/off", "Auto font on name: .fontname on/off"),
-            ("timename", "⏰ ساعت اسم ۱", "⏰ Clock Name 1", ".timename", "ساعت دیجیتال خودکار روی نام ۱: .timename on/off", "Auto digital clock on name 1: .timename on/off"),
-            ("2timename", "⏰ ساعت اسم ۲", "⏰ Clock Name 2", ".2timename", "ساعت دیجیتال روی نام مدل ۲: .2timename on/off", "Auto clock on name mode 2: .2timename on/off"),
-            ("timebio", "🕒 ساعت بیو ۱", "🕒 Clock Bio 1", ".timebio", "ساعت خودکار روی بیو مدل ۱: .timebio on/off", "Auto clock on bio mode 1: .timebio on/off"),
-            ("2timebio", "🕒 ساعت بیو ۲", "🕒 Clock Bio 2", ".2timebio", "ساعت خودکار روی بیو مدل ۲: .2timebio on/off", "Auto clock on bio mode 2: .2timebio on/off"),
-            ("3timebio", "🕒 ساعت بیو ۳", "🕒 Clock Bio 3", ".3timebio", "ساعت خودکار روی بیو مدل ۳: .3timebio on/off", "Auto clock on bio mode 3: .3timebio on/off"),
-            ("4timebio", "🕒 ساعت بیو ۴", "🕒 Clock Bio 4", ".4timebio", "ساعت خودکار روی بیو مدل ۴: .4timebio on/off", "Auto clock on bio mode 4: .4timebio on/off"),
-            ("5timebio", "🕒 ساعت بیو ۵", "🕒 Clock Bio 5", ".5timebio", "ساعت خودکار روی بیو مدل ۵: .5timebio on/off", "Auto clock on bio mode 5: .5timebio on/off"),
-            ("6timebio", "🕒 ساعت بیو ۶", "🕒 Clock Bio 6", ".6timebio", "ساعت خودکار روی بیو مدل ۶: .6timebio on/off", "Auto clock on bio mode 6: .6timebio on/off"),
             ("setprofile", "🖼 تنظیم عکس", "🖼 Set Profile", ".setprofile", "تنظیم عکس پروفایل (با ریپلی روی عکس)", "Set profile photo (Reply to photo)"),
             ("delprofile", "🗑 حذف عکس", "🗑 Del Profile", ".delprofile", "حذف آخرین عکس پروفایل اکانت", "Delete current profile photo"),
-            ("autopic", "🤖 پروفایل خودکار ۱", "🤖 Auto Pic 1", ".autopic", "تغییر خودکار عکس پروفایل با زمان مدل ۱", "Auto dynamic profile photo mode 1"),
-            ("2autopic", "🤖 پروفایل خودکار ۲", "🤖 Auto Pic 2", ".2autopic", "تغییر خودکار عکس پروفایل با زمان مدل ۲", "Auto dynamic profile photo mode 2"),
-            ("3autopic", "🤖 پروفایل خودکار ۳", "🤖 Auto Pic 3", ".3autopic", "تغییر خودکار عکس پروفایل با زمان مدل ۳", "Auto dynamic profile photo mode 3"),
-            ("4autopic", "🤖 پروفایل خودکار ۴", "🤖 Auto Pic 4", ".4autopic", "تغییر خودکار عکس پروفایل با زمان مدل ۴", "Auto dynamic profile photo mode 4"),
+            ("settime", "⏰ ساعت نام (سوییچ)", "⏰ Name Clock (Toggle)", ".settime", "روشن و خاموش کردن ساعت روی نام اکانت با یک کلیک", "Toggle digital clock on account name on/off"),
+            ("clocksetting", "⚙️ تنظیمات ساعت", "⚙️ Clock Settings", ".clocksetting", "مدیریت کشورها، فونت‌ها و پرچم ساعت جهانی", "World Clock countries, fonts and flags settings"),
         ],
         "downloader": [
             ("iginfo", "📸 مشخصات اینستا", "📸 Insta Info", ".iginfo", "دریافت اطلاعات پیج اینستاگرام: .iginfo یوزرنیم", "Get Instagram user profile info: .iginfo user"),
@@ -2675,8 +2695,13 @@ def _titan_category_keyboard(cat_key, lang, user_id):
             cid = item[0]
             label = item[1] if lang == "fa" else item[2]
             syn = item[3]
-            # switch_inline_query_current_chat inserts the command directly into user input
-            row.append(InlineKeyboardButton(f"{label} ({syn})", switch_inline_query_current_chat=f"{syn} "))
+            
+            # Special case for clocksetting: open dedicated helper panel like monshi2!
+            if cid == "clocksetting":
+                cb = f"clocksetting_panel1-{uid}" if lang == "fa" else f"clocksetting_panel2-{uid}"
+                row.append(InlineKeyboardButton(label, callback_data=cb))
+            else:
+                row.append(InlineKeyboardButton(label, switch_inline_query_current_chat=f"{syn} "))
         rows.append(row)
     back_btn = "● بازگشت ●" if lang == "fa" else "● 𝗕𝗮𝗰𝗸 ●"
     back_cb = f"back1-{uid}" if lang == "fa" else f"back2-{uid}"
@@ -2895,6 +2920,41 @@ async def send_titan_panel(client, chat_id, user=None, language="fa"):
         reply_markup=_titan_language_keyboard(user.id)
     )
 
+
+def _clocksetting_helper_panel_text(lang="fa", section="main"):
+    if lang == "en":
+        texts = {
+            "main": """**World Clock Pro Management**\n\nManage real-time digital clock for your Telegram Account Name and Bio.\n\n• Toggle Name Clock: `.settime`\n• Set Country & Font: `.worldclock ir bold`\n• View 16 Countries: `.worldclock list`\n• View 10 Fonts: `.worldclock fonts`\n• Open Clock Console: `.clocksetting`""",
+            "countries": """**World Clock 16 Countries Guide**\n\n• 🇮🇷 Iran (`ir`) - Asia/Tehran\n• 🇩🇪 Germany (`de`) - Europe/Berlin\n• 🇺🇸 USA (`us`) - America/New_York\n• 🇬🇧 UK (`gb`) - Europe/London\n• 🇯🇵 Japan (`jp`) - Asia/Tokyo\n• 🇫🇷 France (`fr`) - Europe/Paris\n• 🇨🇦 Canada (`ca`) - America/Toronto\n• 🇦🇪 UAE (`ae`) - Asia/Dubai\n• 🇹🇷 Turkey (`tr`) - Europe/Istanbul\n• 🇷🇺 Russia (`ru`) - Europe/Moscow\n• 🇨🇳 China (`cn`) - Asia/Shanghai\n• 🇰🇷 South Korea (`kr`) - Asia/Seoul\n• 🇮🇹 Italy (`it`) - Europe/Rome\n• 🇪🇸 Spain (`es`) - Europe/Madrid\n• 🇦🇺 Australia (`au`) - Australia/Sydney\n• 🇧🇷 Brazil (`br`) - America/Sao_Paulo""",
+            "fonts": """**World Clock 10 Premium Fonts**\n\n• Bold: `𝟐𝟏:𝟒𝟐` (`bold`)\n• Sans: `𝟮𝟭:𝟰𝟮` (`sans_bold`)\n• Double: `𝟚𝟙:𝟜𝟚` (`double`)\n• Monospace: `𝟸𝟷:𝟺𝟸` (`monospace`)\n• Persian: `۲۱:۴۲` (`persian`)\n• Circled: `②①:④②` (`circled`)\n• Parenthesized: `⑴⑵:⑶⑷` (`parenthesized`)\n• Subscript: `₂₁:₄₂` (`subscript`)\n• Superscript: `²¹:⁴²` (`superscript`)\n• Standard: `21:42` (`standard`)""",
+            "targets": """**Clock Target Destinations**\n\n• Name Clock: `.timename on/off` (or tap `.settime`)\n• Bio Clock: `.timebio on/off`\n• Dynamic Profile Photo: `.autopic`\n• Instant Apply: `.worldclock apply`""",
+        }
+    else:
+        texts = {
+            "main": """**پنل مدیریت ساعت جهانی (World Clock Pro)**\n\nتنظیم ساعت دیجیتال زنده روی نام و بیوگرافی اکانت تلگرام.\n\n• سوییچ ساعت اسم: `.settime` (روشن/خاموش با یک کلیک)\n• تنظیم کشور و فونت: `.worldclock ir bold`\n• مشاهده ۱۶ کشور: `.worldclock list`\n• مشاهده ۱۰ فونت: `.worldclock fonts`\n• کنسول اینلاین ساعت: `.clocksetting`""",
+            "countries": """**راهنمای ۱۶ کشور ساعت جهانی**\n\n• 🇮🇷 ایران (`ir`) - تهران\n• 🇩🇪 آلمان (`de`) - برلین\n• 🇺🇸 آمریکا (`us`) - نیویورک\n• 🇬🇧 انگلیس (`gb`) - لندن\n• 🇯🇵 ژاپن (`jp`) - توکیو\n• 🇫🇷 فرانسه (`fr`) - پاریس\n• 🇨🇦 کانادا (`ca`) - تورنتو\n• 🇦🇪 امارات (`ae`) - دبی\n• 🇹🇷 ترکیه (`tr`) - استانبول\n• 🇷🇺 روسیه (`ru`) - مسکو\n• 🇨🇳 چین (`cn`) - شانگهای\n• 🇰🇷 کره جنوبی (`kr`) - سئول\n• 🇮🇹 ایتالیا (`it`) - رم\n• 🇪🇸 اسپانیا (`es`) - مادرید\n• 🇦🇺 استرالیا (`au`) - سیدنی\n• 🇧🇷 برزیل (`br`) - سائوپائولو""",
+            "fonts": """**راهنمای ۱۰ فونت پرمیوم ساعت**\n\n• توپر: `𝟐𝟏:𝟒𝟐` (`bold`)\n• سنس: `𝟮𝟭:𝟰𝟮` (`sans_bold`)\n• دوخط: `𝟚𝟙:𝟜𝟚` (`double`)\n• مونو: `𝟸𝟷:𝟺𝟸` (`monospace`)\n• فارسی: `۲۱:۴۲` (`persian`)\n• دایره‌ای: `②①:④②` (`circled`)\n• پرانتزی: `⑴⑵:⑶⑷` (`parenthesized`)\n• زیرنویس: `₂₁:₄₂` (`subscript`)\n• بالانویس: `²¹:⁴²` (`superscript`)\n• ساده: `21:42` (`standard`)""",
+            "targets": """**راهنمای مقاصد نمایش ساعت**\n\n• ساعت روی نام: `.timename on/off` (یا دستور `.settime`)\n• ساعت روی بیو: `.timebio on/off`\n• پروفایل هوشمند: `.autopic`\n• اعمال فوری ساعت: `.worldclock apply`""",
+        }
+    return texts.get(section, texts["main"])
+
+def _clocksetting_helper_panel_keyboard(user_id, lang="fa", section="main"):
+    suffix = str(user_id)
+    if lang == "en":
+        rows = [
+            [InlineKeyboardButton("🌍 16 Countries", callback_data=f"clock_countries2-{suffix}"), InlineKeyboardButton("🔤 10 Fonts", callback_data=f"clock_fonts2-{suffix}")],
+            [InlineKeyboardButton("⏰ Destinations", callback_data=f"clock_targets2-{suffix}"), InlineKeyboardButton("⚡️ Quick Toggle", switch_inline_query_current_chat=".settime ")],
+            [InlineKeyboardButton("● 𝗕𝗮𝗰𝗸 ●", callback_data=f"profile2-{suffix}")],
+        ]
+    else:
+        rows = [
+            [InlineKeyboardButton("🌍 ۱۶ کشور جهان", callback_data=f"clock_countries1-{suffix}"), InlineKeyboardButton("🔤 ۱۰ فونت پرمیوم", callback_data=f"clock_fonts1-{suffix}")],
+            [InlineKeyboardButton("⏰ مقاصد نمایش", callback_data=f"clock_targets1-{suffix}"), InlineKeyboardButton("⚡️ سوییچ سریع ساعت", switch_inline_query_current_chat=".settime ")],
+            [InlineKeyboardButton("● بازگشت ●", callback_data=f"profile1-{suffix}")],
+        ]
+    if section != "main":
+        rows.append([InlineKeyboardButton("🔙 تنظیمات ساعت" if lang == "fa" else "🔙 Clock Settings", callback_data=f"clocksetting_panel{2 if lang == 'en' else 1}-{suffix}")])
+    return InlineKeyboardMarkup(rows)
 
 def _monshi2_helper_panel_text(lang="fa", section="main"):
     if lang == "en":
